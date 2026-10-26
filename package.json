@@ -1,0 +1,15 @@
+{
+  "name": "why-bother-galeria-conceptual",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Proyecto artístico interactivo: ¿Para qué tomarse el trabajo? (Why Bother?)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --open",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}

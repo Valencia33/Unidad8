@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>hola soy la unidad 8</title>
+  <style>
+    body { background: #2c2311; color: rgb(185, 236, 102); font-family: "Comic Sans MS"; text-align: center; }
+    button { background: #70cdf8; color: rgb(15, 8, 53); border: 2px outset rgb(255, 187, 0); padding: 4px 10px; font-family: "Comic Sans MS"; font-size: 16px; cursor: pointer; }
+    .caja { width: 260px; height: 200px; background: rgb(247, 247, 247); border: 1px solid rgb(187, 255, 0); display: flex; align-items: center; justify-content: center; margin: auto; cursor: pointer; }
+    .caja img, .caja video { max-width: 100%; max-height: 100%; }
+    td { text-align: left; vertical-align: top; width: 280px; }
+  </style>
+</head>
+<body>
+
+  <br><br><br>
+
+  <div id="inicio">
+    <h1>¿para que tomarme el trabajo?</h1>
+
+    <div id="carrusel" class="caja" onclick="abrir()">1</div>
+    <br>
+
+    <button onclick="cambiar(-1)">anterior</button>
+    <span id="contador">1 / 5</span>
+    <button onclick="cambiar(1)">siguiente</button>
+  </div>
+
+  <div id="comparacion" style="display: none;">
+    <button onclick="volver()">volver</button>
+    <br><br>
+
+    <table border="1" cellpadding="15" cellspacing="0" align="center">
+      <tr>
+        <td>
+          <h2>miguel</h2>
+          <div id="img-nino" class="caja">1</div>
+          <p><b>que aprendí:</b></p>
+          <ul id="lista-nino"></ul>
+        </td>
+        <td>
+          <h2>ia</h2>
+          <div id="img-ia" class="caja">1IA</div>
+          <p><b>que aprendí:</b></p>
+          <ul id="lista-ia"></ul>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <script>
+    var dibujos = [
+      { n: 1, nino: "<li>comer pintura es malo</li><li>pintar es muy divertido</li><li>combinar colores hace más colores</li>", ia: "<li>abrir nanobanana en gemini</li><li>escribir un prompt en nanobanana</li>" },
+      { n: 2, nino: "<li>pintar con acrílicos</li><li>hacer sombras</li><li>que tengo problemas con las escalas</li>", ia: "" },
+      { n: 3, nino: "<li>preparar un lienzo pa pintar con oleo</li><li>que no sé como preparar un lienzo pa pintar con oleo</li>", ia: "" },
+      { n: 4, nino: "<li>las cosas básicas de illustrator</li><li>a piratear la suite de adobe</li>", ia: "" },
+      { n: 5, nino: "<li>lo básico de blender</li><li>hacer pescados 3d</li>", ia: "" }
+    ];
+
+    var i = 0;
+
+    function ponerFoto(id, nombre) {
+      if (nombre == 5) {
+        document.getElementById(id).innerHTML = '<video src="dibujos/5.mkv" autoplay loop muted></video>';
+      } else if (nombre == "5IA") {
+        document.getElementById(id).innerHTML = '<video src="dibujos/5IA.mp4" autoplay loop muted></video>';
+      } else {
+        document.getElementById(id).innerHTML = '<img src="dibujos/' + nombre + '.png" onerror="this.outerHTML=\'' + nombre + '\'">';
+      }
+    }
+
+    function cambiar(paso) {
+      i = (i + paso + dibujos.length) % dibujos.length;
+      ponerFoto("carrusel", dibujos[i].n);
+      document.getElementById("contador").innerHTML = (i + 1) + " / " + dibujos.length;
+    }
+
+    function abrir() {
+      ponerFoto("img-nino", dibujos[i].n);
+      ponerFoto("img-ia", dibujos[i].n + "IA");
+      document.getElementById("lista-nino").innerHTML = dibujos[i].nino;
+      document.getElementById("lista-ia").innerHTML = dibujos[i].ia;
+      document.getElementById("inicio").style.display = "none";
+      document.getElementById("comparacion").style.display = "block";
+    }
+
+    function volver() {
+      document.getElementById("comparacion").style.display = "none";
+      document.getElementById("inicio").style.display = "block";
+    }
+
+    cambiar(0);
+  </script>
+
+</body>
+</html>
