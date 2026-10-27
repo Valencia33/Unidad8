@@ -30,6 +30,9 @@ function dibujosModularesPlugin() {
 
 export default defineConfig({
   plugins: [dibujosModularesPlugin()],
+  build: {
+    rollupOptions: { input: { main: 'index.html', ia: 'ia.html' } }
+  },
   server: {
     port: 5173,
     open: true

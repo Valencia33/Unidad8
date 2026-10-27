@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hola soy la unidad 8 · ia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- los addons de three importan 'three' por nombre: el importmap lo resuelve al mismo archivo del CDN -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+<style>
+  @property --ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @property --shift { syntax: '<length>'; initial-value: 0px; inherits: true; }
+
+  :root {
+    --bg: #05010f; --ink: #efeaff; --muted: #a59fca; --dim: #6b6591;
+    --violet: #8b5cf6; --fuchsia: #e879f9; --cyan: #22d3ee; --lime: #b9ec66; --amber: #ffbb00;
+    --glass: rgba(18, 10, 42, .46); --stroke: rgba(255, 255, 255, .12);
+    --display: 'Space Grotesk', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --pulse: 0; --sync: 0;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--display); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--violet); color: #fff; }
+
+  /* ── capas ── */
+  canvas.layer { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #gl { z-index: 0; transition: opacity .9s; }
+  #sim { z-index: 1; pointer-events: none; }
+  #fx { z-index: 55; pointer-events: none; }
+  body[data-view="comparacion"] #gl { opacity: .42; }
+  .grain { position: fixed; inset: -100%; z-index: 56; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    animation: grain .9s steps(5) infinite; }
+  @keyframes grain { 0%,100% { transform: translate(0,0) } 20% { transform: translate(-3%,2%) } 40% { transform: translate(2%,-4%) } 60% { transform: translate(-4%,-1%) } 80% { transform: translate(3%,3%) } }
+  @keyframes spin { to { --ang: 360deg; } }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  @keyframes holo { to { background-position: 200% 0; } }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .glass { background: var(--glass); border: 1px solid var(--stroke); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: 0 12px 40px -12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08); }
+  .holo { background: linear-gradient(100deg, #fff, #c4b5fd 20%, var(--cyan) 40%, #fff 50%, var(--fuchsia) 65%, var(--amber) 85%, #fff); background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent; animation: holo 6s linear infinite; }
+  .mono { font-family: var(--mono); }
+
+  /* ── barra superior ── */
+  .topbar { position: fixed; top: 14px; left: 50%; translate: -50% 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: min(980px, calc(100vw - 24px)); padding: 7px 8px 7px 18px; border-radius: 999px; }
+  .brand { font-weight: 700; letter-spacing: -.02em; display: flex; gap: 8px; align-items: center; font-size: 16px; }
+  .brand .spark { display: inline-block; color: var(--cyan); animation: rot 6s linear infinite; text-shadow: 0 0 12px var(--cyan); }
+  .brand .ai { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 19px; }
+  .model { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+  .live { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 10px var(--lime); animation: blink 1.4s infinite; flex: none; }
+  .top-actions { display: flex; gap: 8px; align-items: center; }
+  .switch { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; border-radius: 999px; padding: 3px; background: rgba(255,255,255,.06);
+    border: 1px solid var(--stroke); font: 600 12px var(--mono); text-decoration: none; color: var(--muted); }
+  .switch span { position: relative; z-index: 1; padding: 7px 13px; text-align: center; transition: color .3s; }
+  .switch::before { content: ''; position: absolute; inset: 3px 3px 3px 50%; border-radius: 999px; background: linear-gradient(90deg, var(--violet), var(--cyan));
+    box-shadow: 0 0 18px rgba(139,92,246,.7); transition: inset .45s cubic-bezier(.5,1.7,.4,1); }
+  .switch .on { color: #fff; }
+  body.exiting .switch::before { inset: 3px 50% 3px 3px; }
+  body.exiting .switch .on { color: var(--muted); } body.exiting .switch span:first-child { color: #fff; }
+  body.exiting main, body.exiting #gl, body.exiting #sim { animation: glitchOut .5s steps(6) forwards; }
+  @keyframes glitchOut { 0% { filter: none; } 30% { filter: hue-rotate(90deg) saturate(3); transform: translateX(6px) skewX(4deg); } 60% { filter: invert(1); transform: translateX(-8px); } 100% { opacity: 0; filter: blur(12px); transform: scale(1.04); } }
+
+  /* ── contenido ── */
+  main { position: relative; z-index: 10; min-height: 100vh; display: grid; place-items: center; padding: 92px 16px 56px; text-align: center; transition: padding .4s; }
+  @media (min-width: 1280px) { body:has(#motor.open) main { padding-left: 348px; } }
+  #inicio { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 2.4vh, 22px); width: 100%; }
+  .eyebrow { font: 500 11px var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--muted); padding: 7px 15px; border-radius: 999px; }
+  .eyebrow b { color: var(--cyan); font-weight: 600; }
+
+  /* U7 · cada letra es un cuerpo rígido de Matter.js */
+  #titulo { position: relative; z-index: 20; margin: 0; width: min(1100px, 100%); font: 700 clamp(34px, min(6.2vw, 9.5vh), 88px)/1.04 var(--display); letter-spacing: -.045em;
+    animation: shift 7s linear infinite; }
+  @keyframes shift { to { --shift: 1400px; } }
+  #titulo .w { display: inline-block; white-space: nowrap; }
+  #titulo .l { position: absolute; left: 0; top: 0; display: inline-block; will-change: transform; cursor: grab; user-select: none; touch-action: none;
+    background: linear-gradient(100deg, #fff 0%, #c4b5fd 14%, var(--cyan) 28%, #fff 40%, var(--fuchsia) 56%, var(--amber) 72%, var(--lime) 86%, #fff 100%);
+    background-size: 1400px 100%; background-repeat: repeat-x; background-position: calc(var(--shift) - var(--hx, 0px)) 0;
+    -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 16px rgba(139,92,246,.5)); }
+  #titulo .l.grab { cursor: grabbing; filter: drop-shadow(0 0 22px rgba(34,211,238,.9)); }
+  #titulo.measuring .l { position: static; transform: none !important; }
+
+  .stage { position: relative; }
+  .caja { position: relative; width: max(260px, min(560px, 88vw, calc((100vh - 400px) * 1.5))); aspect-ratio: 3 / 2; border-radius: 22px; display: grid; place-items: center;
+    background: rgba(10, 6, 26, .55); isolation: isolate; cursor: pointer;
+    transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    box-shadow: 0 30px 80px -24px rgba(124, 58, 237, calc(.4 + var(--pulse) * .5)), 0 0 calc(24px + var(--pulse) * 60px) rgba(34, 211, 238, calc(var(--pulse) * .45)); }
+  #carrusel, #img-nino { view-transition-name: hero; }
+  #img-ia { view-transition-name: hero-ia; }
+  .caja::before { content: ''; position: absolute; inset: -1.5px; border-radius: inherit; padding: 1.5px; z-index: -1; pointer-events: none;
+    background: conic-gradient(from var(--ang), var(--cyan), var(--violet), var(--fuchsia), var(--amber), var(--lime), var(--cyan));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: spin 4s linear infinite; }
+  .caja::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; mix-blend-mode: overlay;
+    background: radial-gradient(circle at var(--gx, 50%) var(--gy, 0%), rgba(255,255,255,.28), transparent 50%); }
+  .caja > img, .caja > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; border-radius: 22px; display: block; }
+  .col .caja > img, .col .caja > video { animation: reveal .5s ease-out; }
+  @keyframes reveal { from { opacity: 0; filter: blur(8px) saturate(2); } }
+  .caja .fallback { font: 700 64px var(--display); }
+  .caja.generating { background-image: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%); background-size: 220% 100%; animation: holo 1.1s linear infinite; }
+  .caja.generating > * { opacity: 0; }
+  .gen-label, .hint-chip { position: absolute; left: 50%; translate: -50% 0; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px;
+    pointer-events: none; opacity: 0; transition: opacity .3s; white-space: nowrap; }
+  .gen-label { top: 14px; color: var(--cyan); background: rgba(5,1,15,.6); }
+  .stage:has(.generating) .gen-label { opacity: 1; }
+  .hint-chip { bottom: 14px; color: #fff; background: linear-gradient(90deg, rgba(139,92,246,.85), rgba(34,211,238,.75)); box-shadow: 0 0 24px rgba(139,92,246,.6); }
+  .stage:hover .hint-chip { opacity: 1; }
+  .stage:has(.generating) .hint-chip { opacity: 0; }
+
+  .controls { display: flex; align-items: center; gap: 14px; }
+  .btn { position: relative; font: 600 14px var(--display); color: var(--ink); padding: 12px 20px; border-radius: 999px; border: 1px solid var(--stroke); cursor: pointer;
+    background: rgba(255,255,255,.06); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); display: inline-flex; gap: 8px; align-items: center; transition: background .25s, box-shadow .25s; }
+  .btn:hover { background: rgba(139,92,246,.2); box-shadow: 0 0 0 1px rgba(139,92,246,.6), 0 0 34px rgba(139,92,246,.5); }
+  .btn:focus-visible, .chip:focus-visible, .caja:focus-visible, .switch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+  #contador { font: 600 15px var(--mono); min-width: 84px; padding: 11px 14px; border-radius: 14px; }
+  .hint { margin: 0; font: 400 11px var(--mono); color: var(--dim); letter-spacing: .08em; }
+
+  /* ── comparación ── */
+  #comparacion { width: min(1180px, 100%); display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .vs-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 26px; width: 100%; align-items: start; }
+  .col { padding: 22px; border-radius: 26px; text-align: left; }
+  .col h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; font: 700 clamp(30px, 3.4vw, 46px)/1 var(--display); letter-spacing: -.04em; }
+  .col .tag { font: 500 10px var(--mono); letter-spacing: .2em; text-transform: uppercase; padding: 4px 8px; border-radius: 6px; border: 1px solid currentColor; }
+  .col.miguel .tag { color: var(--amber); } .col.ia .tag { color: var(--cyan); }
+  .col.miguel .name { color: var(--amber); text-shadow: 0 0 30px rgba(255,187,0,.45); }
+  .col .caja { width: 100%; aspect-ratio: 4 / 3; cursor: default; }
+  .col.miguel .caja::before { background: conic-gradient(from var(--ang), var(--amber), var(--lime), #fb923c, var(--amber)); }
+  #img-ia.diffusing > * { animation: diffuse 1.8s cubic-bezier(.2,.7,.2,1); }
+  @keyframes diffuse { 0% { filter: blur(26px) saturate(3) hue-rotate(120deg) contrast(2); opacity: .3; } 60% { filter: blur(4px) saturate(1.4); } 100% { filter: none; } }
+  .aprendi { margin: 18px 0 10px; font: 600 11px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .col ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .col li { padding: 11px 14px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); font-size: 15px; line-height: 1.4; min-height: 44px; transition: opacity .3s; }
+  .col li::before { content: '✦'; color: var(--cyan); margin-right: 10px; }
+  .col.miguel li::before { content: '✎'; color: var(--amber); }
+  .col li.pending { opacity: 0; }
+  .col li.typing::after { content: '▍'; color: var(--cyan); animation: blink .6s steps(1) infinite; }
+  .col li.vacio { font: 400 13px var(--mono); color: var(--dim); border-style: dashed; }
+  .col li.vacio::before { content: ''; margin: 0; }
+  .vs { align-self: center; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; font: 700 17px var(--mono); position: relative; z-index: 2; }
+
+  /* ── motor de física (panel) ── */
+  #motor { position: fixed; left: 16px; bottom: 16px; z-index: 35; width: 316px; border-radius: 20px; font-size: 12.5px; text-align: left;
+    max-height: calc(100vh - 100px); display: flex; flex-direction: column; overflow: hidden; }
+  .motor-head { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 16px; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+  .motor-head small { color: var(--muted); letter-spacing: .04em; text-transform: none; font-weight: 400; }
+  .motor-head .chev { margin-left: auto; transition: transform .3s; }
+  #motor:not(.open) .chev { transform: rotate(180deg); }
+  .motor-body { overflow-y: auto; padding: 0 14px 14px; display: grid; gap: 10px; scrollbar-width: thin; }
+  #motor:not(.open) .motor-body { display: none; }
+  .u { border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
+  .u header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .u header b { font: 600 10px var(--mono); padding: 2px 6px; border-radius: 6px; background: rgba(139,92,246,.28); color: #ddd6fe; }
+  .led { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #3b3556; transition: background .4s, box-shadow .4s; }
+  body[data-view="boot"] .u[data-views~="boot"] .led,
+  body[data-view="inicio"] .u[data-views~="inicio"] .led,
+  body[data-view="comparacion"] .u[data-views~="comparacion"] .led { background: var(--lime); box-shadow: 0 0 10px var(--lime); }
+  .u p { margin: 6px 0 0; color: var(--muted); line-height: 1.45; }
+  .u .eq { font: 400 10.5px var(--mono); color: #c4b5fd; }
+  .row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; align-items: center; }
+  .chip { font: 500 11px var(--mono); padding: 5px 9px; border-radius: 8px; border: 1px solid var(--stroke); background: rgba(255,255,255,.05); color: var(--ink); cursor: pointer; transition: background .2s; }
+  .chip:hover { background: rgba(139,92,246,.25); }
+  .chip.on { background: linear-gradient(90deg, rgba(139,92,246,.7), rgba(34,211,238,.55)); border-color: transparent; }
+  .check { display: flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--muted); cursor: pointer; }
+  .check input { accent-color: var(--violet); }
+  .slider { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-top: 8px; font: 500 11px var(--mono); color: var(--muted); }
+  .slider input { accent-color: var(--violet); width: 100%; }
+  .meter { height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 8px; }
+  .meter span { display: block; height: 100%; width: calc(var(--sync) * 100%); background: linear-gradient(90deg, var(--fuchsia), var(--cyan)); box-shadow: 0 0 12px var(--cyan); }
+  .matriz { display: grid; grid-template-columns: 34px repeat(3, 1fr); gap: 3px; margin-top: 8px; font: 500 10px var(--mono); color: var(--muted); }
+  .matriz span { display: grid; place-items: center; }
+  .matriz button { font: 600 10px var(--mono); color: #fff; border: 0; border-radius: 6px; padding: 6px 0; cursor: pointer; }
+  .keys { margin: 4px 0 0; font: 400 10px/1.7 var(--mono); color: var(--dim); }
+  .keys kbd { font: inherit; color: var(--ink); padding: 0 4px; border-radius: 4px; background: rgba(255,255,255,.08); }
+
+  /* ── arranque: Physarum + circle packing + Gauss ── */
+  #boot { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: grid; place-items: center; clip-path: circle(150% at 50% 50%);
+    transition: clip-path 1.05s cubic-bezier(.7,0,.2,1); }
+  #boot.leaving { clip-path: circle(0% at 50% 50%); }
+  #slime { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .boot-ui { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 26px; border-radius: 28px; width: min(430px, calc(100vw - 32px)); }
+  #pack { width: 190px; height: 190px; }
+  .boot-title { font: 700 30px var(--display); letter-spacing: -.03em; }
+  .boot-title i { font: italic 400 34px var(--serif); }
+  #log { font: 11.5px/1.6 var(--mono); color: var(--muted); height: 9.6em; overflow: hidden; width: 100%; text-align: left; margin: 0; white-space: pre-wrap; }
+  .progress { height: 4px; width: 100%; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+  .progress span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--cyan), var(--fuchsia)); box-shadow: 0 0 12px var(--cyan); }
+  #hist { width: 100%; height: 64px; }
+  .boot-note { font: 400 10.5px var(--mono); color: var(--dim); }
+  .cta { font: 700 16px var(--display); color: #fff; border: 0; cursor: pointer; padding: 15px 28px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--violet), var(--fuchsia), var(--cyan), var(--violet)); background-size: 300% 100%; animation: holo 3s linear infinite, glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 46px rgba(139,92,246,.9), 0 0 90px rgba(34,211,238,.35); } }
+
+  /* ── cursor, toasts ── */
+  #cursor, #cursor-dot { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; border-radius: 50%; }
+  #cursor { width: 36px; height: 36px; margin: -18px 0 0 -18px; border: 1.5px solid rgba(255,255,255,.85); mix-blend-mode: difference; transition: width .25s, height .25s, margin .25s, background .25s; }
+  body.hovering #cursor { width: 62px; height: 62px; margin: -31px 0 0 -31px; background: rgba(255,255,255,.14); }
+  #cursor-dot { width: 6px; height: 6px; margin: -3px 0 0 -3px; background: #fff; box-shadow: 0 0 10px #fff; }
+  @media (pointer: fine) { body, body * { cursor: none !important; } }
+  @media (pointer: coarse) { #cursor, #cursor-dot { display: none; } }
+  #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 58; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+  .toast { font: 500 12px var(--mono); padding: 10px 14px; border-radius: 12px; animation: tin .45s cubic-bezier(.3,1.6,.5,1); transition: opacity .5s, transform .5s; }
+  .toast.out { opacity: 0; transform: translateX(30px); }
+  @keyframes tin { from { opacity: 0; transform: translateY(16px) scale(.9); } }
+
+  ::view-transition-group(hero), ::view-transition-group(hero-ia) { animation-duration: .7s; animation-timing-function: cubic-bezier(.6,0,.2,1); }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; }
+
+  @media (max-width: 820px) {
+    .vs-grid { grid-template-columns: 1fr; }
+    .vs { justify-self: center; }
+    .model { display: none; }
+    #motor { width: calc(100vw - 32px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .grain, .caja::before, #titulo { animation: none; } }
+</style>
+</head>
+<body data-view="boot">
+
+<canvas id="gl" class="layer"></canvas>
+<canvas id="sim" class="layer"></canvas>
+
+<header class="topbar glass">
+  <div class="brand"><span class="spark">✦</span><span>unidad8<span class="ai">.ai</span></span></div>
+  <div class="model"><i class="live"></i><span id="modelo">ia-∞ · cargando pesos…</span></div>
+  <div class="top-actions">
+    <button id="sonido" class="chip" title="sonido (M)">♪ on</button>
+    <a id="switch" class="switch" href="index.html" title="cambiar a la versión hecha a mano"><span>miguel</span><span class="on">ia</span></a>
+  </div>
+</header>
+
+<main>
+  <section id="inicio">
+    <div class="eyebrow glass">✦ galería generativa · <b>7</b> motores de física</div>
+    <h1 id="titulo" aria-label="¿para que tomarme el trabajo?">¿para que tomarme el trabajo?</h1>
+    <div class="stage">
+      <div id="carrusel" class="caja tilt generating" role="button" tabindex="0" aria-label="abrir comparación"></div>
+      <span class="gen-label">✦ generando…</span>
+      <span class="hint-chip">✦ comparar con ia</span>
+    </div>
+    <div class="controls">
+      <button id="anterior" class="btn" data-mag>← anterior</button>
+      <span id="contador" class="glass" aria-live="polite">1 / 5</span>
+      <button id="siguiente" class="btn" data-mag>siguiente →</button>
+    </div>
+    <p class="hint">clic en la imagen para comparar · arrastra las letras del título</p>
+  </section>
+
+  <section id="comparacion" hidden>
+    <button id="volver" class="btn" data-mag>← volver</button>
+    <div class="vs-grid">
+      <article class="col miguel glass">
+        <h2><span class="name">miguel</span><span class="tag">humano</span></h2>
+        <div id="img-nino" class="caja tilt"></div>
+        <p class="aprendi"><b>que aprendí:</b></p>
+        <ul id="lista-nino"></ul>
+      </article>
+      <div class="vs glass">VS</div>
+      <article class="col ia glass">
+        <h2><span class="name holo">ia</span><span class="tag">modelo</span></h2>
+        <div id="img-ia" class="caja tilt"></div>
+        <p class="aprendi"><b>que aprendí:</b></p>
+        <ul id="lista-ia"></ul>
+      </article>
+    </div>
+  </section>
+</main>
+
+<aside id="motor" class="glass">
+  <button id="motor-toggle" class="motor-head" aria-expanded="false"><i class="live"></i>motor de física <small>7 sistemas</small><span class="chev">⌃</span></button>
+  <div class="motor-body">
+    <section class="u" data-views="boot inicio comparacion">
+      <header><b>U1</b> aleatoriedad <i class="led"></i></header>
+      <p>ruido Perlin (aurora + campo de flujo) · Gauss (chispas, frecuencias) · caminata, tendencia y Lévy · circle packing</p>
+    </section>
+    <section class="u" data-views="inicio comparacion">
+      <header><b>U2</b> movimiento · Particle Life <i class="led"></i></header>
+      <p>Motion 101 en todo. En la comparación: «miguel vs ia», matriz asimétrica (fila siente a columna, clic = +, shift+clic = −).</p>
+      <div id="matriz" class="matriz"></div>
+      <div class="row"><button id="semilla" class="chip">nueva semilla</button><span class="eq" id="semilla-out"></span></div>
+    </section>
+    <section class="u" data-views="inicio comparacion">
+      <header><b>U3</b> fuerzas <i class="led"></i></header>
+      <div class="row" id="modos">
+        <button class="chip" data-mode="1">1 inercia</button><button class="chip" data-mode="2">2 viento</button><button class="chip" data-mode="3">3 atracción</button>
+        <button class="chip" data-mode="4">4 repulsión</button><button class="chip" data-mode="5">5 vórtice</button>
+      </div>
+      <label class="check"><input type="checkbox" id="flujo" checked> sumar campo Perlin (modos 3-5)</label>
+      <p class="eq">v += F·dt ; x += v·dt (Euler semiimplícito) · drag −c·v · radial suavizada con s · clic = impulso</p>
+    </section>
+    <section class="u" data-views="inicio comparacion">
+      <header><b>U4</b> oscilaciones · Kuramoto <i class="led"></i></header>
+      <label class="slider">K <input id="k" type="range" min="0" max="5" step="0.05" value="1.4"><output id="k-out">1.40</output></label>
+      <div class="meter"><span></span></div>
+      <div class="row"><span class="eq">sincronía r = <b id="r-out">0.00</b></span><button id="perturbar" class="chip">perturbar</button></div>
+      <p class="eq">θ̇ᵢ = ωᵢ + Kᵢ·r·sin(ψ − θᵢ) · 8 luciérnagas, 4 personalidades · clic en una = perturbarla</p>
+    </section>
+    <section class="u" data-views="inicio comparacion">
+      <header><b>U5</b> partículas <i class="led"></i></header>
+      <p>emisores con vida (cursor, clics) · la imagen se disuelve en partículas · membrana de resortes con tensión entre miguel e ia</p>
+    </section>
+    <section class="u" data-views="boot inicio">
+      <header><b>U6</b> agentes <i class="led"></i></header>
+      <p>flocking + wander + huida + campo de flujo (inicio) · arrive: los píxeles llegan a su sitio · Physarum (arranque)</p>
+      <label class="check"><input type="checkbox" id="ver-campo"> ver el campo de flujo</label>
+      <div class="row"><button id="reboot" class="chip">ver Physarum</button></div>
+    </section>
+    <section class="u" data-views="inicio">
+      <header><b>U7</b> tipografía jugable <i class="led"></i></header>
+      <p>Matter.js: cada letra es un cuerpo rígido atado a su sitio por un resorte. Arrástralas y lánzalas.</p>
+      <div class="row"><button id="soltar" class="chip">soltar letras</button></div>
+    </section>
+    <p class="keys"><kbd>←</kbd><kbd>→</kbd> navegar · <kbd>enter</kbd> comparar · <kbd>esc</kbd> volver · <kbd>1</kbd>–<kbd>5</kbd> fuerzas · <kbd>M</kbd> sonido · <kbd>F</kbd> campo · <kbd>P</kbd> perturbar · <kbd>L</kbd> letras · <kbd>H</kbd> panel</p>
+  </div>
+</aside>
+
+<div id="boot">
+  <canvas id="slime"></canvas>
+  <div class="boot-ui glass">
+    <canvas id="pack" width="320" height="320"></canvas>
+    <div class="boot-title">unidad8<i class="holo">.ai</i></div>
+    <pre id="log"></pre>
+    <div class="progress"><span id="prog"></span></div>
+    <canvas id="hist" width="380" height="64"></canvas>
+    <button id="generar" class="cta" hidden>✦ generar experiencia</button>
+    <div class="boot-note">🔊 con sonido · mueve el cursor para alimentar al moho</div>
+  </div>
+</div>
+
+<canvas id="fx" class="layer"></canvas>
+<div class="grain"></div>
+<div id="cursor"></div><div id="cursor-dot"></div>
+<div id="toasts"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/postprocessing/OutputPass.js';
+import Matter from 'https://cdn.jsdelivr.net/npm/matter-js@0.19.0/+esm';
+
+// ═══ datos (los mismos de index.html; el primero, n: 6, es la comparación entre las dos páginas) ═══
+var dibujos = [
+  { n: 6, nino: "<li>hacer un carrusel con un arreglo</li><li>mostrar y esconder cosas con display</li><li>poner fotos y videos con innerHTML</li>", ia: "<li>abrir claude code</li><li>escribir un prompt en claude code</li>" },
+  { n: 1, nino: "<li>comer pintura es malo</li><li>pintar es muy divertido</li><li>combinar colores hace más colores</li>", ia: "<li>abrir nanobanana en gemini</li><li>escribir un prompt en nanobanana</li>" },
+  { n: 2, nino: "<li>pintar con acrílicos</li><li>hacer sombras</li><li>que tengo problemas con las escalas</li>", ia: "" },
+  { n: 3, nino: "<li>preparar un lienzo pa pintar con oleo</li><li>que no sé como preparar un lienzo pa pintar con oleo</li>", ia: "" },
+  { n: 4, nino: "<li>las cosas básicas de illustrator</li><li>a piratear la suite de adobe</li>", ia: "" },
+  { n: 5, nino: "<li>lo básico de blender</li><li>hacer pescados 3d</li>", ia: "" }
+];
+var i = 0;
+
+// ═══ utilidades ═══
+const TAU = Math.PI * 2;
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const coarse = matchMedia('(pointer: coarse)').matches;
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W = innerWidth, H = innerHeight, T = 0;
+const small = coarse || W < 760;
+const state = { view: 'boot' };
+const mouse = { x: W / 2, y: H / 2, lx: W / 2, ly: H / 2, idle: 99, seen: false };
+const PAL = ['#22d3ee', '#8b5cf6', '#e879f9', '#ffbb00', '#b9ec66', '#60a5fa', '#f472b6'];
+const root = document.documentElement.style;
+function setView(v) { state.view = v; document.body.dataset.view = v; }
+
+// U1 · distribución normal (Box-Muller)
+function gauss(m = 0, s = 1) {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return m + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+}
+// U1 · distribución personalizada tipo Lévy: casi siempre pasos cortos, a veces saltos enormes (ley de potencias)
+const levy = (min = 1, alpha = 1.5, max = 80) => Math.min(max, min * Math.pow(1 - Math.random(), -1 / alpha));
+
+// U1 · ruido Perlin (improved noise, Ken Perlin 2002)
+const noise = (() => {
+  const perm = [...Array(256).keys()];
+  for (let k = 255; k > 0; k--) { const j = (Math.random() * (k + 1)) | 0; [perm[k], perm[j]] = [perm[j], perm[k]]; }
+  const p = new Uint8Array(512); for (let k = 0; k < 512; k++) p[k] = perm[k & 255];
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const grad = (h, x, y, z) => { h &= 15; const u = h < 8 ? x : y, v = h < 4 ? y : h === 12 || h === 14 ? x : z; return (h & 1 ? -u : u) + (h & 2 ? -v : v); };
+  return (x, y = 0, z = 0) => {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z, B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+    return lerp(lerp(lerp(grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z), u), lerp(grad(p[AB], x, y - 1, z), grad(p[BB], x - 1, y - 1, z), u), v),
+      lerp(lerp(grad(p[AA + 1], x, y, z - 1), grad(p[BA + 1], x - 1, y, z - 1), u), lerp(grad(p[AB + 1], x, y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+  };
+})();
+
+// semillas reproducibles (U2: variaciones de un mismo sistema)
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+
+// sprites de brillo precalculados (dibujar un gradiente por partícula sería carísimo)
+const sprites = new Map();
+function sprite(color, r = 24) {
+  const key = color + r;
+  let c = sprites.get(key);
+  if (c) return c;
+  c = document.createElement('canvas'); c.width = c.height = r * 2;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(r, r, 0, r, r, r);
+  gr.addColorStop(0, '#ffffff'); gr.addColorStop(.14, color); gr.addColorStop(.42, color + '55'); gr.addColorStop(1, color + '00');
+  g.fillStyle = gr; g.fillRect(0, 0, r * 2, r * 2);
+  sprites.set(key, c);
+  return c;
+}
+
+// ═══ audio (U4: la sincronía se oye) ═══
+const audio = {
+  ac: null, muted: false,
+  init() {
+    if (this.ac) { this.ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ac = this.ac = new AC();
+    const comp = ac.createDynamicsCompressor();
+    this.master = ac.createGain(); this.master.gain.value = this.muted ? 0 : .55;
+    this.master.connect(comp); comp.connect(ac.destination);
+    // reverb: respuesta al impulso hecha de ruido con caída exponencial
+    const len = ac.sampleRate * 2.6 | 0, ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let k = 0; k < len; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / len, 3); }
+    const verb = ac.createConvolver(); verb.buffer = ir;
+    const wet = ac.createGain(); wet.gain.value = .45; verb.connect(wet); wet.connect(this.master);
+    this.send = ac.createGain(); this.send.gain.value = .35; this.send.connect(verb);
+    this.noiseBuf = ac.createBuffer(1, ac.sampleRate * .5 | 0, ac.sampleRate);
+    const nd = this.noiseBuf.getChannelData(0); for (let k = 0; k < nd.length; k++) nd[k] = Math.random() * 2 - 1;
+    // dron: su filtro se abre cuando el grupo se sincroniza
+    this.lp = ac.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 260; this.lp.Q.value = 7;
+    const dg = ac.createGain(); dg.gain.value = .045;
+    [55, 55.4, 82.4, 110.3].forEach(f => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(this.lp); o.start(); });
+    this.lp.connect(dg); dg.connect(this.master); dg.connect(this.send);
+  },
+  out(pan) {
+    const ac = this.ac, g = ac.createGain();
+    if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); p.connect(this.master); p.connect(this.send); }
+    else { g.connect(this.master); g.connect(this.send); }
+    return g;
+  },
+  env(g, t, peak, dur) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + .006); g.gain.exponentialRampToValueAtTime(.0001, t + dur); },
+  // cuatro personalidades sonoras (latido, rebelde, eco, seguidor)
+  voice(type, freq, pan, vel = 1) {
+    if (!this.ac || this.muted) return;
+    const ac = this.ac, t = ac.currentTime, g = this.out(pan);
+    if (type === 0) {
+      const o = ac.createOscillator(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(46, t + .2);
+      o.connect(g); this.env(g, t, .5 * vel, .38); o.start(t); o.stop(t + .4);
+    } else if (type === 1) {
+      const s = ac.createBufferSource(), bp = ac.createBiquadFilter(); s.buffer = this.noiseBuf; bp.type = 'bandpass'; bp.frequency.value = rand(3500, 8000); bp.Q.value = 1.2;
+      s.connect(bp); bp.connect(g); this.env(g, t, .22 * vel, .09); s.start(t); s.stop(t + .12);
+    } else if (type === 2) {
+      const c = ac.createOscillator(), m = ac.createOscillator(), mg = ac.createGain();
+      c.frequency.value = freq * 2; m.frequency.value = freq * 7; mg.gain.setValueAtTime(freq * 3, t); mg.gain.exponentialRampToValueAtTime(1, t + 1.3);
+      m.connect(mg); mg.connect(c.frequency); c.connect(g); this.env(g, t, .14 * vel, 1.5); c.start(t); m.start(t); c.stop(t + 1.6); m.stop(t + 1.6);
+    } else {
+      const o = ac.createOscillator(), lp = ac.createBiquadFilter(); o.type = 'triangle'; o.frequency.value = freq;
+      lp.type = 'lowpass'; lp.frequency.setValueAtTime(4000, t); lp.frequency.exponentialRampToValueAtTime(500, t + .4);
+      o.connect(lp); lp.connect(g); this.env(g, t, .24 * vel, .5); o.start(t); o.stop(t + .55);
+    }
+  },
+  blip(f = 1200, v = .03) {
+    if (!this.ac || this.muted) return;
+    const ac = this.ac, t = ac.currentTime, o = ac.createOscillator(), g = this.out(0);
+    o.frequency.value = f; o.connect(g); this.env(g, t, v, .06); o.start(t); o.stop(t + .08);
+  },
+  whoosh(dir = 1) {
+    if (!this.ac || this.muted) return;
+    const ac = this.ac, t = ac.currentTime, s = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = this.out(dir * .6);
+    s.buffer = this.noiseBuf; s.loop = true; bp.type = 'bandpass'; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(5000, t + .45);
+    s.connect(bp); bp.connect(g); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.12, t + .15); g.gain.exponentialRampToValueAtTime(.0001, t + .55);
+    s.start(t); s.stop(t + .6);
+  },
+  update(r) { if (this.ac) this.lp.frequency.setTargetAtTime(220 + r * r * 2600, this.ac.currentTime, .35); },
+  toggle() {
+    this.muted = !this.muted;
+    try { localStorage.setItem('u8-mute', this.muted ? '1' : '0'); } catch {}
+    if (this.ac) this.master.gain.setTargetAtTime(this.muted ? 0 : .55, this.ac.currentTime, .05);
+    $('#sonido').textContent = this.muted ? '♪ off' : '♪ on';
+  }
+};
+try { audio.muted = localStorage.getItem('u8-mute') === '1'; } catch {}
+$('#sonido').textContent = audio.muted ? '♪ off' : '♪ on';
+
+// ═══ lienzos 2D ═══
+const fx = $('#fx'), fctx = fx.getContext('2d');
+const sim = $('#sim'), sctx = sim.getContext('2d');
+const CDPR = Math.min(devicePixelRatio || 1, small ? 1.5 : 1.75);
+function sizeCanvas(c, ctx) { c.width = Math.round(W * CDPR); c.height = Math.round(H * CDPR); ctx.setTransform(CDPR, 0, 0, CDPR, 0, 0); }
+
+// ═══ U1 + U6 · campo de flujo con ruido Perlin ═══
+// el campo es una rejilla de direcciones; la regla de consulta de cada agente es «leo la celda donde estoy»
+const flow = {
+  cell: 44, show: false,
+  resize() {
+    this.cols = Math.ceil(W / this.cell) + 1; this.rows = Math.ceil(H / this.cell) + 1;
+    this.cos = new Float32Array(this.cols * this.rows); this.sin = new Float32Array(this.cols * this.rows);
+  },
+  update(t) {
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const a = noise(c * .09, r * .09, t * .08) * TAU * 1.8, k = r * this.cols + c;
+      this.cos[k] = Math.cos(a); this.sin[k] = Math.sin(a);
+    }
+  },
+  idx(x, y) { return clamp((y / this.cell) | 0, 0, this.rows - 1) * this.cols + clamp((x / this.cell) | 0, 0, this.cols - 1); },
+  draw(ctx) {
+    if (!this.show) return;
+    ctx.strokeStyle = 'rgba(185,236,102,.45)'; ctx.fillStyle = 'rgba(185,236,102,.8)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const k = r * this.cols + c, x = c * this.cell + this.cell / 2, y = r * this.cell + this.cell / 2;
+      ctx.moveTo(x - this.cos[k] * 13, y - this.sin[k] * 13); ctx.lineTo(x + this.cos[k] * 13, y + this.sin[k] * 13);
+    }
+    ctx.stroke();
+  }
+};
+
+// ═══ U3 · campo de fuerzas en three.js (14k partículas, bloom) ═══
+const BG_FS = `
+uniform float uTime, uSync, uPulse, uView; uniform vec2 uRes, uMouse; varying vec2 vUv;
+float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
+float fbm(vec2 p) { float v = 0.0, a = 0.5; mat2 m = mat2(1.6, 1.2, -1.2, 1.6); for (int k = 0; k < 4; k++) { v += a * vnoise(p); p = m * p; a *= 0.5; } return v; }
+void main() {
+  vec2 asp = vec2(uRes.x / uRes.y, 1.0), p = (vUv - 0.5) * asp;
+  float t = uTime * 0.06;
+  vec2 q = vec2(fbm(p * 1.4 + vec2(0.0, t)), fbm(p * 1.4 + vec2(5.2, -t)));
+  vec2 r = vec2(fbm(p * 1.8 + 2.2 * q + vec2(1.7, 9.2) + t), fbm(p * 1.8 + 2.2 * q + vec2(8.3, 2.8) - t));
+  float f = fbm(p * 1.6 + 2.0 * r);
+  vec3 col = vec3(0.012, 0.004, 0.035);
+  col = mix(col, vec3(0.20, 0.07, 0.45), smoothstep(0.25, 0.85, f));
+  col = mix(col, vec3(0.03, 0.33, 0.43), smoothstep(0.45, 0.95, r.x) * 0.55);
+  col = mix(col, vec3(0.52, 0.16, 0.52), smoothstep(0.55, 1.0, q.y) * 0.35);
+  vec3 duo = mix(vec3(0.55, 0.32, 0.02), vec3(0.02, 0.35, 0.5), smoothstep(0.3, 0.7, vUv.x));
+  col = mix(col, col * 0.5 + duo * f * 0.6, uView);
+  vec2 m = (uMouse - 0.5) * asp;
+  col += vec3(0.30, 0.15, 0.70) * 0.22 * exp(-5.0 * length(p - m));
+  col *= 0.7 + 0.25 * uSync + 0.45 * uPulse;
+  col *= 1.0 - smoothstep(0.25, 1.25, length(p * vec2(0.9, 1.1)));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const PT_VS = `
+attribute float aSpeed; uniform float uSize; varying float vS;
+void main() { vS = aSpeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = uSize * (0.8 + min(aSpeed, 2.5) * 0.7); }`;
+const PT_FS = `
+varying float vS;
+void main() {
+  float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
+  float a = 1.0 - smoothstep(0.0, 0.5, d);
+  vec3 col = mix(vec3(0.35, 0.22, 0.95), vec3(0.13, 0.83, 0.93), smoothstep(0.0, 0.8, vS));
+  col = mix(col, vec3(0.98, 0.47, 0.98), smoothstep(0.8, 1.8, vS)) + smoothstep(1.8, 3.0, vS) * 0.6;
+  gl_FragColor = vec4(col * a * 0.75, 1.0);
+}`;
+const MODES = { 1: 'inercia', 2: 'viento', 3: 'atracción', 4: 'repulsión', 5: 'vórtice' };
+const field = {
+  ok: false, N: calm ? 4000 : small ? 5000 : 14000, mode: 5, flow: true, view: 0,
+  init() {
+    const r = this.renderer = new THREE.WebGLRenderer({ canvas: $('#gl'), antialias: false, powerPreference: 'high-performance' });
+    r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.25));
+    r.setSize(W, H);
+    r.outputColorSpace = THREE.LinearSRGBColorSpace; // los colores de los shaders ya están pensados para pantalla
+    this.scene = new THREE.Scene();
+    this.cam = new THREE.OrthographicCamera(-W / 2, W / 2, H / 2, -H / 2, -10, 10);
+    this.bgU = { uTime: { value: 0 }, uRes: { value: new THREE.Vector2(W, H) }, uMouse: { value: new THREE.Vector2(.5, .5) }, uSync: { value: 0 }, uPulse: { value: 0 }, uView: { value: 0 } };
+    const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: this.bgU, depthTest: false, depthWrite: false, fragmentShader: BG_FS,
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
+    }));
+    bg.frustumCulled = false; bg.renderOrder = -1; this.scene.add(bg);
+    const N = this.N;
+    this.p = new Float32Array(N * 2); this.v = new Float32Array(N * 2); this.pos = new Float32Array(N * 3); this.spd = new Float32Array(N);
+    for (let k = 0; k < N; k++) { this.p[2 * k] = rand(W); this.p[2 * k + 1] = rand(H); }
+    const g = new THREE.BufferGeometry();
+    this.posAttr = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.spdAttr = new THREE.BufferAttribute(this.spd, 1).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('position', this.posAttr); g.setAttribute('aSpeed', this.spdAttr);
+    const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+      uniforms: { uSize: { value: 2.4 * r.getPixelRatio() } }, vertexShader: PT_VS, fragmentShader: PT_FS,
+      transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    pts.frustumCulled = false; this.scene.add(pts);
+    this.composer = new EffectComposer(r);
+    this.composer.addPass(new RenderPass(this.scene, this.cam));
+    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), .95, .55, .12));
+    this.composer.addPass(new OutputPass());
+    this.ok = true;
+  },
+  setMode(m) {
+    this.mode = m;
+    if (m === 1) for (let k = 0; k < this.v.length; k++) this.v[k] = gauss(0, 140); // inercia: cada una conserva la velocidad que le toque
+    $$('#modos .chip').forEach(b => b.classList.toggle('on', +b.dataset.mode === m));
+  },
+  impulse(x, y) {
+    const { p, v } = this;
+    for (let k = 0; k < this.N; k++) {
+      const dx = p[2 * k] - x, dy = p[2 * k + 1] - y, d = Math.hypot(dx, dy);
+      if (d < 280) { const f = 950 * (1 - d / 280) / Math.max(d, 1); v[2 * k] += dx * f; v[2 * k + 1] += dy * f; }
+    }
+  },
+  frame(dt, t, pulse) {
+    if (!this.ok) return;
+    const { N, p, v, pos, spd } = this, W2 = W / 2, H2 = H / 2;
+    // atractor = cursor; si está quieto, uno virtual que recorre una curva de Lissajous
+    let mx = mouse.x, my = mouse.y;
+    if (mouse.idle > 3 || !mouse.seen) { mx = W2 + Math.cos(t * .31) * W * .28; my = H2 + Math.sin(t * .47) * H * .25; }
+    const mode = this.mode, G = 1.2e7, s2 = 3600, drag = mode === 1 ? 0 : 1.15, useFlow = this.flow && mode > 2;
+    const fc = flow.cos, fs = flow.sin, cell = flow.cell, cols = flow.cols, rmax = flow.rows - 1, cmax = cols - 1;
+    for (let k = 0; k < N; k++) {
+      const ix = 2 * k;
+      let x = p[ix], y = p[ix + 1], vx = v[ix], vy = v[ix + 1], fx = 0, fy = 0;
+      if (mode >= 3) {
+        const dx = mx - x, dy = my - y, d2 = dx * dx + dy * dy + s2, d = Math.sqrt(d2); // s suaviza la singularidad
+        if (mode === 3) { const g = G / (d2 * d); fx = dx * g; fy = dy * g; }
+        else if (mode === 4) { const g = -1.6 * G / (d2 * d); fx = dx * g; fy = dy * g; }
+        else { const g = .3 * G / (d2 * d), tg = 560 / (1 + d / 240) / d; fx = dx * g - dy * tg; fy = dy * g + dx * tg; } // radial + tangencial
+      } else if (mode === 2) fx = 260;
+      if (useFlow) { const q = Math.min((y / cell) | 0, rmax) * cols + Math.min((x / cell) | 0, cmax); fx += fc[q] * 110; fy += fs[q] * 110; }
+      fx -= drag * vx; fy -= drag * vy;           // drag lineal
+      vx += fx * dt; vy += fy * dt;               // Euler semiimplícito: primero la velocidad…
+      x += vx * dt; y += vy * dt;                 // …y la posición con la velocidad ya nueva
+      if (x < 0) x += W; else if (x >= W) x -= W;
+      if (y < 0) y += H; else if (y >= H) y -= H;
+      p[ix] = x; p[ix + 1] = y; v[ix] = vx; v[ix + 1] = vy;
+      pos[3 * k] = x - W2; pos[3 * k + 1] = H2 - y;
+      spd[k] = Math.sqrt(vx * vx + vy * vy) / 320;
+    }
+    this.posAttr.needsUpdate = true; this.spdAttr.needsUpdate = true;
+    this.view = lerp(this.view, state.view === 'comparacion' ? 1 : 0, .04);
+    const u = this.bgU; u.uTime.value = t; u.uMouse.value.set(mx / W, 1 - my / H); u.uSync.value = kura.r; u.uPulse.value = pulse; u.uView.value = this.view;
+    this.composer.render(dt);
+  },
+  resize() {
+    if (!this.ok) return;
+    this.renderer.setSize(W, H); this.composer.setSize(W, H);
+    Object.assign(this.cam, { left: -W / 2, right: W / 2, top: H / 2, bottom: -H / 2 }); this.cam.updateProjectionMatrix();
+    this.bgU.uRes.value.set(W, H);
+  }
+};
+
+// ═══ U6 · flocking (separación, alineación, cohesión) + wander + huida + campo de flujo ═══
+const flock = {
+  list: [],
+  init(n) { this.list = Array.from({ length: n }, () => ({ x: rand(W), y: rand(H), vx: gauss(0, 1.5), vy: gauss(0, 1.5), ax: 0, ay: 0, wa: rand(TAU) })); },
+  update(dt) {
+    const f = dt * 60, MS = 3.2, MF = .09, list = this.list;
+    for (const b of list) {
+      let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, ns = 0, n = 0, fx = 0, fy = 0;
+      for (const o of list) {
+        if (o === b) continue;
+        const dx = o.x - b.x, dy = o.y - b.y, d2 = dx * dx + dy * dy;
+        if (d2 < 3600) {
+          n++; ax += o.vx; ay += o.vy; cx += o.x; cy += o.y;
+          if (d2 < 676 && d2 > 0) { sx -= dx / d2; sy -= dy / d2; ns++; }
+        }
+      }
+      // steering de Reynolds: deseada − actual, limitada a la fuerza máxima
+      const steer = (dx, dy, w) => {
+        const m = Math.hypot(dx, dy); if (!m) return;
+        dx = dx / m * MS - b.vx; dy = dy / m * MS - b.vy;
+        const s = Math.hypot(dx, dy); if (s > MF) { dx = dx / s * MF; dy = dy / s * MF; }
+        fx += dx * w; fy += dy * w;
+      };
+      if (ns) steer(sx, sy, 1.8);
+      if (n) { steer(ax, ay, 1); steer(cx / n - b.x, cy / n - b.y, .8); }
+      const k = flow.idx(b.x, b.y); steer(flow.cos[k], flow.sin[k], .55);
+      b.wa += gauss(0, .35);
+      const h = Math.atan2(b.vy, b.vx);
+      steer(Math.cos(h) * 40 + Math.cos(b.wa + h) * 20, Math.sin(h) * 40 + Math.sin(b.wa + h) * 20, .35);
+      const mx = b.x - mouse.x, my = b.y - mouse.y, md = Math.hypot(mx, my);
+      if (md < 150 && mouse.idle < 2) steer(mx, my, 3 * (1 - md / 150));
+      b.ax = fx; b.ay = fy;
+    }
+    for (const b of list) { // Motion 101: aceleración → velocidad → posición
+      b.vx += b.ax * f; b.vy += b.ay * f;
+      const s = Math.hypot(b.vx, b.vy); if (s > MS) { b.vx *= MS / s; b.vy *= MS / s; }
+      b.x += b.vx * f; b.y += b.vy * f;
+      if (b.x < -20) b.x += W + 40; else if (b.x > W + 20) b.x -= W + 40;
+      if (b.y < -20) b.y += H + 40; else if (b.y > H + 20) b.y -= H + 40;
+    }
+  },
+  draw(ctx) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of this.list) {
+      const a = Math.atan2(b.vy, b.vx), c = PAL[(((a + Math.PI) / TAU * 5) | 0) % 5];
+      ctx.drawImage(sprite(c, 14), b.x - 14, b.y - 14);
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(a);
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, 3.5); ctx.lineTo(-3, 0); ctx.lineTo(-6, -3.5); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══ U2 · Particle Life «miguel vs ia» (matriz asimétrica) ═══
+const life = {
+  types: [{ name: 'miguel', color: '#ffbb00' }, { name: 'ia', color: '#22d3ee' }, { name: 'aprendizaje', color: '#b9ec66' }],
+  // M[a][b] = cuánto a se siente atraído por b. La ia persigue a miguel, miguel huye de la ia y busca aprender; la ia evita aprender.
+  M: [[.25, -.6, .8], [.9, .1, -.5], [.4, -.2, .2]],
+  n: small ? 240 : 480, rMax: 95, beta: .3, seed: 1,
+  init(seed = (Math.random() * 1e4) | 0) {
+    this.seed = seed; const R = mulberry32(seed), n = this.n;
+    this.x = new Float32Array(n); this.y = new Float32Array(n); this.vx = new Float32Array(n); this.vy = new Float32Array(n); this.t = new Uint8Array(n);
+    for (let k = 0; k < n; k++) {
+      const t = this.t[k] = k % 3;
+      this.x[k] = t === 0 ? R() * W * .45 : t === 1 ? W * .55 + R() * W * .45 : R() * W;
+      this.y[k] = R() * H;
+    }
+    $('#semilla-out').textContent = 'semilla #' + seed;
+  },
+  update() {
+    const dt = .02, fr = Math.pow(.5, dt / .04), R = this.rMax, R2 = R * R, b0 = this.beta, { n, x, y, vx, vy, t, M } = this;
+    const mActive = mouse.idle < 2;
+    for (let a = 0; a < n; a++) {
+      let fx = 0, fy = 0; const row = M[t[a]], xa = x[a], ya = y[a];
+      for (let b = 0; b < n; b++) {
+        const dx = x[b] - xa, dy = y[b] - ya, d2 = dx * dx + dy * dy;
+        if (d2 > R2 || d2 === 0) continue;
+        const d = Math.sqrt(d2), r = d / R;
+        // núcleo repulsivo si están muy cerca; si no, un «sombrero» con la intensidad de la matriz
+        const f = r < b0 ? r / b0 - 1 : row[t[b]] * (1 - Math.abs(2 * r - 1 - b0) / (1 - b0));
+        fx += dx / d * f; fy += dy / d * f;
+      }
+      if (mActive) { const dx = xa - mouse.x, dy = ya - mouse.y, d = Math.hypot(dx, dy); if (d < 130 && d > 0) { fx += dx / d * 1.6 * (1 - d / 130); fy += dy / d * 1.6 * (1 - d / 130); } }
+      vx[a] = vx[a] * fr + fx * R * 10 * dt; vy[a] = vy[a] * fr + fy * R * 10 * dt;
+    }
+    for (let a = 0; a < n; a++) {
+      x[a] += vx[a] * dt; y[a] += vy[a] * dt;
+      if (x[a] < 0) { x[a] = 0; vx[a] *= -.5; } else if (x[a] > W) { x[a] = W; vx[a] *= -.5; }
+      if (y[a] < 0) { y[a] = 0; vy[a] *= -.5; } else if (y[a] > H) { y[a] = H; vy[a] *= -.5; }
+    }
+  },
+  draw(ctx) {
+    ctx.globalCompositeOperation = 'lighter';
+    const S = this.types.map(t => sprite(t.color, 12));
+    for (let a = 0; a < this.n; a++) ctx.drawImage(S[this.t[a]], this.x[a] - 12, this.y[a] - 12);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══ U5 · membrana de resortes entre miguel e ia (vínculos, tensión, propagación) ═══
+const membrane = {
+  nodes: [], N: 26,
+  init() {
+    const r = $('.vs').getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    this.vertical = innerWidth > 820;
+    const A = this.vertical ? { x: cx, y: -20 } : { x: -20, y: cy }, B = this.vertical ? { x: cx, y: H + 20 } : { x: W + 20, y: cy };
+    this.nodes = [];
+    for (let k = 0; k <= this.N; k++) {
+      const t = k / this.N, x = lerp(A.x, B.x, t), y = lerp(A.y, B.y, t);
+      this.nodes.push({ x, y, rx: x, ry: y, vx: 0, vy: 0, pin: k === 0 || k === this.N, strain: 0 });
+    }
+    this.rest = Math.hypot(B.x - A.x, B.y - A.y) / this.N;
+  },
+  update() {
+    const nd = this.nodes, k = .32;
+    for (let s = 0; s < this.N; s++) { // ley de Hooke entre vecinos
+      const a = nd[s], b = nd[s + 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, f = k * (L - this.rest) / L;
+      a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; a.strain = L / this.rest - 1;
+    }
+    for (const n of nd) {
+      if (n.pin) { n.vx = n.vy = 0; continue; }
+      n.vx += (n.rx - n.x) * .012; n.vy += (n.ry - n.y) * .012; // anclaje suave a su sitio
+      const dx = n.x - mouse.x, dy = n.y - mouse.y, d = Math.hypot(dx, dy);
+      if (d < 110 && d > 0 && mouse.idle < 2) { n.vx += dx / d * 2.2 * (1 - d / 110); n.vy += dy / d * 2.2 * (1 - d / 110); }
+      n.vx *= .9; n.vy *= .9; n.x += n.vx; n.y += n.vy;
+    }
+    // las partículas de Particle Life empujan la membrana y ella las empuja a ellas
+    const L = life, R = 24;
+    for (const n of nd) {
+      if (n.pin) continue;
+      for (let a = 0; a < L.n; a++) {
+        const dx = L.x[a] - n.x, dy = L.y[a] - n.y;
+        if (dx > R || dx < -R || dy > R || dy < -R) continue;
+        const d = Math.hypot(dx, dy);
+        if (d >= R || d === 0) continue;
+        const o = (R - d) / d;
+        L.vx[a] += dx * o * 6; L.vy[a] += dy * o * 6; n.vx -= dx * o * .02; n.vy -= dy * o * .02;
+      }
+    }
+    const mid = nd[this.N >> 1];
+    $('.vs').style.translate = `${mid.x - mid.rx}px ${mid.y - mid.ry}px`;
+  },
+  draw(ctx) {
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    const nd = this.nodes;
+    for (let s = 0; s < this.N; s++) {
+      const a = nd[s], b = nd[s + 1], st = clamp(Math.abs(a.strain) * 9, 0, 1);
+      ctx.strokeStyle = `rgba(${lerp(34, 240, st) | 0},${lerp(211, 90, st) | 0},${lerp(238, 220, st) | 0},.9)`;
+      ctx.lineWidth = 1.5 + st * 2.5; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (const n of nd) ctx.drawImage(sprite('#e879f9', 8), n.x - 8, n.y - 8);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══ U4 · Kuramoto: 8 luciérnagas, 4 personalidades ═══
+const kura = {
+  K: 1.4, r: 0, psi: 0, agents: [],
+  P: [ // la personalidad está en el comportamiento: sensibilidad al acople, dispersión de frecuencia, eco, temblor
+    { name: 'latido', sens: 1, spread: .06, color: '#ffbb00', ring: 1 },
+    { name: 'rebelde', sens: .35, spread: .3, color: '#f472b6', ring: 1.12, jitter: 2.5 },
+    { name: 'eco', sens: 1, spread: .12, color: '#22d3ee', ring: 1.06, echo: true },
+    { name: 'seguidor', sens: 2.2, spread: .1, color: '#b9ec66', ring: .94 }
+  ],
+  init() {
+    const notes = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33]; // pentatónica de la menor
+    this.agents = notes.map((note, k) => {
+      const type = k % 4, p = this.P[type];
+      return { type, p, note, theta: rand(TAU), omega: TAU * Math.max(.2, gauss(.62, p.spread)), x: W / 2, y: H / 2, vx: 0, vy: 0, flash: 0, echoT: 0 };
+    });
+  },
+  perturb(amount = 1) { for (const a of this.agents) a.theta += gauss(0, Math.PI * amount); },
+  kick(a) { a.theta += Math.PI; a.flash = 1; audio.blip(300, .05); },
+  step(dt) {
+    const A = this.agents; let sx = 0, sy = 0;
+    for (const a of A) { sx += Math.cos(a.theta); sy += Math.sin(a.theta); }
+    this.r = Math.hypot(sx, sy) / A.length; this.psi = Math.atan2(sy, sx); // parámetro de orden r·e^{iψ}
+    for (const a of A) {
+      const before = a.theta;
+      a.theta += (a.omega + this.K * a.p.sens * this.r * Math.sin(this.psi - a.theta)) * dt; // forma de campo medio
+      if (Math.floor(a.theta / TAU) !== Math.floor(before / TAU)) this.fire(a);
+      if (a.echoT > 0 && (a.echoT -= dt) <= 0) { audio.voice(a.type, a.note * 1.5, a.x / W * 2 - 1, .45); a.flash = Math.max(a.flash, .6); }
+      a.flash *= Math.exp(-dt * 5);
+    }
+  },
+  fire(a) { a.flash = 1; audio.voice(a.type, a.note, a.x / W * 2 - 1, .55 + .45 * this.r); if (a.p.echo) a.echoT = .19; },
+  move() { // cada luciérnaga orbita en el ángulo de su propia fase: sincronizadas = juntas
+    const el = state.view === 'comparacion' ? $('.vs') : $('#carrusel'), r = el.getBoundingClientRect(), big = state.view !== 'comparacion';
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2, rx = big ? r.width / 2 + 46 : 74, ry = big ? r.height / 2 + 36 : 74;
+    for (const a of this.agents) {
+      let tx = cx + Math.cos(a.theta - Math.PI / 2) * rx * a.p.ring, ty = cy + Math.sin(a.theta - Math.PI / 2) * ry * a.p.ring;
+      if (a.p.jitter) { tx += gauss(0, a.p.jitter); ty += gauss(0, a.p.jitter); }
+      a.vx = (a.vx + (tx - a.x) * .12) * .7; a.vy = (a.vy + (ty - a.y) * .12) * .7; // resorte amortiguado
+      a.x += a.vx; a.y += a.vy;
+    }
+  },
+  draw(ctx) {
+    const A = this.agents;
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 1;
+    for (let a = 0; a < A.length; a++) for (let b = a + 1; b < A.length; b++) {
+      const c = Math.cos(A[a].theta - A[b].theta);
+      if (c > .8) { ctx.strokeStyle = `rgba(200,180,255,${(c - .8) * 2.2})`; ctx.beginPath(); ctx.moveTo(A[a].x, A[a].y); ctx.lineTo(A[b].x, A[b].y); ctx.stroke(); }
+    }
+    for (const a of A) { const s = 10 + a.flash * 26; ctx.drawImage(sprite(a.p.color, 32), a.x - s, a.y - s, s * 2, s * 2); }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══ U5 · emisor de chispas (vida, gravedad, arrastre) ═══
+const sparks = {
+  list: [],
+  emit(x, y, n, spread = 60) {
+    for (let k = 0; k < n && this.list.length < 700; k++)
+      this.list.push({ x, y, vx: gauss(0, spread), vy: gauss(0, spread) - 40, life: 1, decay: rand(.7, 1.6), c: PAL[(Math.random() * PAL.length) | 0], s: rand(6, 14) });
+  },
+  update(dt) {
+    let j = 0;
+    for (const p of this.list) {
+      p.vy += 160 * dt; p.vx *= .985; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
+      if (p.life > 0) this.list[j++] = p;
+    }
+    this.list.length = j;
+  },
+  draw(ctx) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this.list) { const s = p.s * p.life; ctx.drawImage(sprite(p.c, 16), p.x - s, p.y - s, s * 2, s * 2); }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══ U5 + U6 · la imagen se disuelve en partículas y la nueva llega píxel a píxel con «arrive» ═══
+const pix = {
+  list: [], size: small ? 8 : 6, res: null,
+  release() { if (this.res) { const r = this.res; this.res = null; r(); } },
+  dissolveAll(dir) {
+    for (const p of this.list) if (p.mode === 'in') { p.mode = 'out'; p.dir = dir; p.life = 1; p.decay = rand(.7, 1.5); p.delay = 0; }
+    this.release();
+  },
+  spawnOut(pts, rect, dir) {
+    for (const pt of pts) {
+      const sweep = dir > 0 ? (pt.x - rect.left) / rect.w : (rect.left + rect.w - pt.x) / rect.w;
+      this.list.push({ x: pt.x, y: pt.y, vx: gauss(0, 30), vy: gauss(0, 30), c: pt.c, mode: 'out', dir, life: 1, decay: rand(.6, 1.3), delay: sweep * .25 });
+    }
+  },
+  assemble(pts, rect, dir) {
+    this.release();
+    return new Promise(res => {
+      this.res = res; this.deadline = performance.now() + 1800;
+      for (const pt of pts) {
+        const sweep = dir > 0 ? (rect.left + rect.w - pt.x) / rect.w : (pt.x - rect.left) / rect.w;
+        // nube de ruido gaussiano → imagen: el «denoising» hecho con steering
+        this.list.push({ x: rect.cx + dir * rect.w * .55 + gauss(0, rect.w * .32), y: rect.cy + gauss(0, rect.h * .45), vx: 0, vy: 0,
+          tx: pt.x, ty: pt.y, c: pt.c, mode: 'in', delay: sweep * .4 + rand(.1) });
+      }
+    });
+  },
+  clearIns() { this.list = this.list.filter(p => p.mode !== 'in'); },
+  update(dt) {
+    const f = dt * 60; let j = 0, ins = 0, arrived = 0;
+    for (const p of this.list) {
+      if (p.mode === 'in') {
+        ins++;
+        if (p.delay > 0) { p.delay -= dt; this.list[j++] = p; continue; }
+        const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
+        if (d < .8 && Math.abs(p.vx) + Math.abs(p.vy) < .8) { p.x = p.tx; p.y = p.ty; p.vx = p.vy = 0; arrived++; this.list[j++] = p; continue; }
+        const sp = d < 110 ? 24 * d / 110 : 24; // arrive: frena al acercarse
+        let sx = dx / d * sp - p.vx, sy = dy / d * sp - p.vy; const sm = Math.hypot(sx, sy);
+        if (sm > 2.4) { sx *= 2.4 / sm; sy *= 2.4 / sm; }
+        p.vx += sx * f; p.vy += sy * f; p.x += p.vx * f; p.y += p.vy * f;
+        this.list[j++] = p;
+      } else {
+        if (p.delay > 0) { p.delay -= dt; this.list[j++] = p; continue; }
+        const k = flow.idx(p.x, p.y);
+        p.vx += (flow.cos[k] * 180 - p.dir * 720) * dt; p.vy += (flow.sin[k] * 180 - 160) * dt;
+        p.vx *= .985; p.vy *= .985; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
+        if (p.life > 0) this.list[j++] = p;
+      }
+    }
+    this.list.length = j;
+    if (this.res && (arrived >= ins * .985 || performance.now() > this.deadline)) this.release();
+  },
+  draw(ctx) {
+    const s = this.size * .9, h = s / 2;
+    for (const p of this.list) {
+      ctx.globalAlpha = p.mode === 'out' ? Math.max(0, p.life) : 1;
+      ctx.fillStyle = p.c; ctx.fillRect(p.x - h, p.y - h, s, s);
+    }
+    ctx.globalAlpha = 1;
+  }
+};
+
+// ═══ U7 · título jugable con Matter.js ═══
+const { Engine, Bodies, Body, Composite, Constraint } = Matter;
+const title = {
+  el: $('#titulo'), text: '¿para que tomarme el trabajo?', letters: [], loose: false,
+  build() {
+    this.el.textContent = ''; this.el.classList.add('measuring'); // en línea hasta que layout() mida
+    this.text.split(' ').forEach((word, k, arr) => {
+      const w = document.createElement('span'); w.className = 'w';
+      for (const ch of word) { const l = document.createElement('span'); l.className = 'l'; l.textContent = ch; l.setAttribute('aria-hidden', 'true'); w.append(l); }
+      this.el.append(w);
+      if (k < arr.length - 1) this.el.append(' ');
+    });
+    this.el.addEventListener('pointerdown', e => this.grab(e));
+  },
+  layout() { // mide dónde «vive» cada letra y arma el mundo físico
+    if (!this.el.offsetParent) return;
+    const el = this.el; el.classList.add('measuring'); el.style.height = '';
+    const box = el.getBoundingClientRect();
+    this.letters = [...el.querySelectorAll('.l')].map(s => {
+      const r = s.getBoundingClientRect();
+      return { s, w: r.width, h: r.height, hx: r.left - box.left + r.width / 2, hy: r.top - box.top + r.height / 2 };
+    });
+    el.style.height = box.height + 'px';
+    el.classList.remove('measuring');
+    const engine = this.engine = Engine.create(); engine.gravity.y = 0;
+    const bodies = [], springs = [];
+    for (const L of this.letters) {
+      L.s.style.setProperty('--hx', (L.hx - L.w / 2) + 'px');
+      L.body = Bodies.rectangle(L.hx, L.hy, L.w * .78, L.h * .58, { chamfer: { radius: Math.min(L.w, L.h) * .12 }, restitution: .5, friction: .2, frictionAir: .04 });
+      // dos resortes (izq/der) en vez de uno al centro: así también devuelven la rotación
+      const o = Math.max(L.w * .3, L.h * .22); // letras finas («l», «í») necesitan brazo para el torque
+      L.springs = [-o, o].map(dx => Constraint.create({ pointA: { x: L.hx + dx, y: L.hy }, bodyB: L.body, pointB: { x: dx, y: 0 }, length: 0, stiffness: .012, damping: .06 }));
+      bodies.push(L.body); springs.push(...L.springs);
+    }
+    const fl = H - box.top, wl = -box.left, wr = W - box.left;
+    // piso y paredes solo existen al soltar las letras: con los resortes puestos atraparían letras que entran desde fuera
+    this.walls = [Bodies.rectangle((wl + wr) / 2, fl + 100, wr - wl + 400, 200, { isStatic: true }),
+      Bodies.rectangle(wl - 100, fl / 2, 200, fl * 4, { isStatic: true }), Bodies.rectangle(wr + 100, fl / 2, 200, fl * 4, { isStatic: true })];
+    this.springs = springs; this.loose = false;
+    Composite.add(engine.world, [...bodies, ...springs]);
+  },
+  drop() { // entran desde arriba, una a una, cuando se activa su resorte
+    this.letters.forEach((L, k) => {
+      Body.setPosition(L.body, { x: L.hx + gauss(0, 140), y: L.hy - rand(500, 900) });
+      Body.setAngle(L.body, rand(-1.5, 1.5)); Body.setVelocity(L.body, { x: 0, y: 0 });
+      for (const s of L.springs) s.stiffness = 0;
+      setTimeout(() => { for (const s of L.springs) s.stiffness = .012; }, 200 + k * 55);
+    });
+  },
+  release() {
+    if (this.loose || !this.engine) return;
+    this.loose = true; this.engine.gravity.y = 1.1;
+    Composite.remove(this.engine.world, this.springs); Composite.add(this.engine.world, this.walls);
+    clearTimeout(this.reT); this.reT = setTimeout(() => this.reattach(), 4200);
+  },
+  reattach() {
+    if (!this.loose) return;
+    this.loose = false; this.engine.gravity.y = 0;
+    Composite.remove(this.engine.world, this.walls); Composite.add(this.engine.world, this.springs);
+  },
+  grab(e) {
+    const s = e.target.closest('.l'), L = s && this.letters.find(l => l.s === s);
+    if (!L) return;
+    e.preventDefault(); s.setPointerCapture(e.pointerId); s.classList.add('grab'); audio.blip(700, .04);
+    const local = ev => { const b = this.el.getBoundingClientRect(); return { x: ev.clientX - b.left, y: ev.clientY - b.top }; };
+    const m = local(e), pos = L.body.position;
+    const c = Constraint.create({ pointA: m, bodyB: L.body, pointB: { x: m.x - pos.x, y: m.y - pos.y }, stiffness: .2, damping: .1, length: 0 });
+    Composite.add(this.engine.world, c);
+    const move = ev => { const q = local(ev); c.pointA.x = q.x; c.pointA.y = q.y; };
+    const up = () => { Composite.remove(this.engine.world, c); s.classList.remove('grab'); s.removeEventListener('pointermove', move); s.removeEventListener('pointerup', up); s.removeEventListener('pointercancel', up); };
+    s.addEventListener('pointermove', move); s.addEventListener('pointerup', up); s.addEventListener('pointercancel', up);
+  },
+  update(dt) {
+    if (!this.engine) return;
+    const b = this.el.getBoundingClientRect(), mx = mouse.x - b.left, my = mouse.y - b.top;
+    this.letters.forEach((L, k) => {
+      if (!this.loose) for (const s of L.springs) s.pointA.y = L.hy + Math.sin(T * 2.2 + k * .5) * 4; // ola: el ancla oscila (U4)
+      const p = L.body.position, dx = p.x - mx, dy = p.y - my, d = Math.hypot(dx, dy);
+      if (d < 90 && d > 0 && mouse.idle < 1) Body.applyForce(L.body, p, { x: dx / d * .0008 * L.body.mass, y: dy / d * .0008 * L.body.mass });
+    });
+    Engine.update(this.engine, clamp(dt * 1000, 8, 20));
+    for (const L of this.letters) {
+      const p = L.body.position;
+      L.s.style.transform = `translate(${p.x - L.w / 2}px, ${p.y - L.h / 2}px) rotate(${L.body.angle}rad)`;
+    }
+  }
+};
+
+// ═══ U6 · Physarum (moho mucilaginoso) para el arranque ═══
+const slime = {
+  init() {
+    const c = $('#slime'), s = small ? 5 : 4, gw = this.gw = Math.ceil(W / s), gh = this.gh = Math.ceil(H / s);
+    this.s = s; c.width = gw; c.height = gh; this.ctx = c.getContext('2d');
+    this.img = this.ctx.createImageData(gw, gh); this.px = new Uint32Array(this.img.data.buffer);
+    this.a = new Float32Array(gw * gh); this.b = new Float32Array(gw * gh);
+    const n = this.n = Math.round(gw * gh * (calm ? .06 : .12));
+    this.ax = new Float32Array(n); this.ay = new Float32Array(n); this.ah = new Float32Array(n);
+    for (let k = 0; k < n; k++) { this.ax[k] = rand(gw); this.ay[k] = rand(gh); this.ah[k] = rand(TAU); }
+    const stops = [[0, 5, 1, 15], [.25, 30, 10, 70], [.5, 124, 58, 237], [.75, 34, 211, 238], [1, 255, 255, 255]];
+    this.lut = new Uint32Array(256);
+    for (let k = 0; k < 256; k++) {
+      const t = k / 255; let j = 0; while (t > stops[j + 1][0]) j++;
+      const A = stops[j], B = stops[j + 1], u = (t - A[0]) / (B[0] - A[0]);
+      this.lut[k] = (255 << 24) | ((lerp(A[3], B[3], u) | 0) << 16) | ((lerp(A[2], B[2], u) | 0) << 8) | (lerp(A[1], B[1], u) | 0);
+    }
+    // U1 · tres caminantes: aleatorio uniforme, con tendencia a la derecha (no uniforme) y vuelo de Lévy. Dejan comida para el moho.
+    this.walkers = [{ kind: 0, x: gw * .3, y: gh * .5 }, { kind: 1, x: gw * .1, y: gh * .3 }, { kind: 2, x: gw * .7, y: gh * .6 }];
+  },
+  deposit(x, y, v, r = 1) {
+    const { gw, gh, a } = this;
+    for (let j = -r; j <= r; j++) for (let k = -r; k <= r; k++) { const xi = (x | 0) + k, yi = (y | 0) + j; if (xi >= 0 && yi >= 0 && xi < gw && yi < gh) a[yi * gw + xi] += v; }
+  },
+  step() {
+    const { gw, gh, n, ax, ay, ah } = this; let a = this.a;
+    const SA = .39, RA = .785, SD = 9, SS = 1, DEP = .3, DECAY = .9; // Jones: sensor 22.5°, giro 45° → red
+    const S = (x, y) => { let xi = x | 0, yi = y | 0; if (xi < 0) xi += gw; else if (xi >= gw) xi -= gw; if (yi < 0) yi += gh; else if (yi >= gh) yi -= gh; return a[yi * gw + xi]; };
+    for (let k = 0; k < n; k++) { // sentir (izq, frente, der) → girar → avanzar → depositar
+      let h = ah[k], x = ax[k], y = ay[k];
+      const f = S(x + Math.cos(h) * SD, y + Math.sin(h) * SD), l = S(x + Math.cos(h - SA) * SD, y + Math.sin(h - SA) * SD), r = S(x + Math.cos(h + SA) * SD, y + Math.sin(h + SA) * SD);
+      if (f > l && f > r) { /* sigue recto */ } else if (f < l && f < r) h += Math.random() < .5 ? -RA : RA; else if (l > r) h -= RA; else if (r > l) h += RA;
+      x += Math.cos(h) * SS; y += Math.sin(h) * SS;
+      if (x < 0) x += gw; else if (x >= gw) x -= gw;
+      if (y < 0) y += gh; else if (y >= gh) y -= gh;
+      ax[k] = x; ay[k] = y; ah[k] = h; a[(y | 0) * gw + (x | 0)] += DEP;
+    }
+    for (const w of this.walkers) {
+      if (w.kind === 0) { w.x += ((Math.random() * 3) | 0) - 1; w.y += ((Math.random() * 3) | 0) - 1; }
+      else if (w.kind === 1) { const r = Math.random(); if (r < .4) w.x += 1.5; else if (r < .6) w.x -= 1.5; else if (r < .8) w.y += 1.5; else w.y -= 1.5; }
+      else { const ang = rand(TAU), st = levy(.8, 1.5, 40); w.x += Math.cos(ang) * st; w.y += Math.sin(ang) * st; }
+      w.x = (w.x + gw) % gw; w.y = (w.y + gh) % gh;
+      this.deposit(w.x, w.y, 3, 1);
+    }
+    if (mouse.seen && mouse.idle < 1) this.deposit(mouse.x / this.s, mouse.y / this.s, 2.5, 2);
+    const b = this.b; // difusión parcial (30 % del promedio 3×3) + evaporación
+    for (let y = 0; y < gh; y++) {
+      const ym = (y === 0 ? gh - 1 : y - 1) * gw, y0 = y * gw, yp = (y === gh - 1 ? 0 : y + 1) * gw;
+      for (let x = 0; x < gw; x++) {
+        const xm = x === 0 ? gw - 1 : x - 1, xp = x === gw - 1 ? 0 : x + 1;
+        const mean = (a[ym + xm] + a[ym + x] + a[ym + xp] + a[y0 + xm] + a[y0 + x] + a[y0 + xp] + a[yp + xm] + a[yp + x] + a[yp + xp]) / 9;
+        b[y0 + x] = (a[y0 + x] * .7 + mean * .3) * DECAY;
+      }
+    }
+    this.a = b; this.b = a;
+  },
+  draw() {
+    const { a, px, lut } = this;
+    for (let k = 0; k < a.length; k++) { const v = a[k]; px[k] = lut[(v / (v + .9) * 255) | 0]; }
+    this.ctx.putImageData(this.img, 0, 0);
+  }
+};
+
+// ═══ U1 · circle packing aleatorio (logo del arranque) ═══
+const pack = {
+  init() { this.ctx = $('#pack').getContext('2d'); this.circles = []; this.fails = 0; },
+  step() {
+    const R = 152;
+    for (let k = 0; k < 24 && this.fails < 900; k++) {
+      const a = rand(TAU), d = Math.sqrt(Math.random()) * R, x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const r = 2 + 34 * Math.pow(Math.random(), 3.2); // no uniforme: muchos pequeños, pocos grandes
+      if (d + r > R) { this.fails++; continue; }
+      if (this.circles.some(o => (o.x - x) ** 2 + (o.y - y) ** 2 < (o.r + r + 2) ** 2)) { this.fails++; continue; }
+      this.fails = 0;
+      this.circles.push({ x, y, r, g: 0, c: PAL[(((Math.atan2(y, x) + Math.PI) / TAU * 4 + d / R) | 0) % 5] });
+    }
+  },
+  draw() {
+    const ctx = this.ctx; ctx.clearRect(0, 0, 320, 320); ctx.save(); ctx.translate(160, 160);
+    for (const c of this.circles) {
+      c.g = Math.min(1, c.g + .07);
+      const e = 1 + 2.7 * Math.pow(c.g - 1, 3) + 1.7 * Math.pow(c.g - 1, 2); // ease-out-back
+      ctx.beginPath(); ctx.arc(c.x, c.y, Math.max(0, c.r * e), 0, TAU);
+      ctx.fillStyle = c.c + 'cc'; ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+// ═══ U1 · histograma gaussiano («entrenando») ═══
+const hist = {
+  init() { this.ctx = $('#hist').getContext('2d'); this.bins = new Uint32Array(41); this.n = 0; },
+  step() { for (let k = 0; k < 70; k++) { const b = Math.round((gauss() + 4) / 8 * 40); if (b >= 0 && b <= 40) { this.bins[b]++; this.n++; } } },
+  draw() {
+    const ctx = this.ctx, w = 380, h = 64, bw = w / 41, max = Math.max(1, ...this.bins);
+    ctx.clearRect(0, 0, w, h);
+    const g = ctx.createLinearGradient(0, h, 0, 0); g.addColorStop(0, '#8b5cf6'); g.addColorStop(1, '#22d3ee');
+    ctx.fillStyle = g;
+    this.bins.forEach((v, k) => { const bh = v / max * (h - 12); ctx.fillRect(k * bw + 1, h - bh, bw - 2, bh); });
+    ctx.strokeStyle = '#e879f9'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let k = 0; k <= 40; k++) { const z = k / 40 * 8 - 4, y = h - Math.exp(-z * z / 2) * (h - 12); k ? ctx.lineTo(k * bw + bw / 2, y) : ctx.moveTo(bw / 2, y); }
+    ctx.stroke();
+    ctx.fillStyle = '#a59fca'; ctx.font = '10px JetBrains Mono, monospace'; ctx.fillText(`N(0,1) · n = ${this.n}`, 4, 11);
+  }
+};
+
+// ═══ arranque ═══
+const LOG = ['> inicializando unidad8.ai', '> cargando pesos: 7 sistemas físicos', '> U1 aleatoriedad ........ ok', '> U2 movimiento .......... ok', '> U3 fuerzas ............. ok',
+  '> U4 oscilaciones ........ ok', '> U5 partículas .......... ok', '> U6 agentes ............. ok', '> U7 tipografía jugable .. ok', '> eliminando esfuerzo humano ... 100%', '> listo. ¿para qué tomarse el trabajo?'].join('\n');
+const boot = {
+  el: $('#boot'), t: 0, ready: false, started: false, prev: 'inicio',
+  show(prev) {
+    this.prev = prev; this.t = 0; this.ready = false;
+    this.el.hidden = false; this.el.classList.remove('leaving'); $('#generar').hidden = true;
+    $('#generar').textContent = this.started ? '✦ volver a la galería' : '✦ generar experiencia';
+    setView('boot'); slime.init(); pack.init(); hist.init();
+  },
+  frame(dt) {
+    this.t += dt;
+    slime.step(); slime.draw(); pack.step(); pack.draw(); hist.step(); hist.draw();
+    const p = Math.min(1, this.t / (this.started ? 1 : 3.4));
+    $('#prog').style.width = p * 100 + '%';
+    const log = $('#log'); log.textContent = LOG.slice(0, (p * LOG.length) | 0) + (p < 1 ? '▍' : ''); log.scrollTop = 1e4;
+    if (p >= 1 && !this.ready) { this.ready = true; $('#generar').hidden = false; $('#generar').focus({ preventScroll: true }); }
+  },
+  exit() {
+    audio.init(); audio.whoosh(1);
+    this.el.classList.add('leaving');
+    setTimeout(() => { if (state.view !== 'boot') this.el.hidden = true; }, 1050);
+    setView(this.prev);
+    if (!this.started) {
+      this.started = true;
+      document.fonts.ready.then(() => { title.layout(); title.drop(); });
+      cambiar(0);
+      setTimeout(() => toast('✦ experiencia generada · 0% esfuerzo humano'), 900);
+    }
+  }
+};
+
+// ═══ la galería (misma lógica que index.html, con efectos) ═══
+function fallback(nombre) { const s = document.createElement('span'); s.className = 'fallback holo'; s.textContent = nombre; return s; }
+function media(nombre) {
+  let el;
+  if (nombre == 5 || nombre == '5IA') {
+    el = document.createElement('video'); el.muted = true; el.loop = true; el.autoplay = true; el.playsInline = true;
+    el.src = nombre == 5 ? 'dibujos/5.mkv' : 'dibujos/5IA.mp4';
+  } else {
+    el = new Image(); el.alt = 'dibujo ' + nombre; el.src = 'dibujos/' + nombre + '.png';
+  }
+  el.addEventListener('error', () => el.isConnected && el.replaceWith(fallback(nombre)));
+  return el;
+}
+function ponerFoto(id, nombre) { document.getElementById(id).replaceChildren(media(nombre)); }
+function loadMedia(nombre) {
+  return new Promise(res => {
+    const el = media(nombre);
+    const done = ok => { clearTimeout(to); res(ok ? el : fallback(nombre)); };
+    const to = setTimeout(() => done(true), 5000);
+    el.addEventListener(el.tagName === 'VIDEO' ? 'loadeddata' : 'load', () => done(true), { once: true });
+    el.addEventListener('error', () => done(false), { once: true });
+  });
+}
+const smp = document.createElement('canvas'), smpx = smp.getContext('2d', { willReadFrequently: true });
+function innerRect(el) { const r = el.getBoundingClientRect(), pad = 10, w = r.width - pad * 2, h = r.height - pad * 2; return { left: r.left + pad, top: r.top + pad, w, h, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; }
+function sample(el, rect) { // la imagen, reducida, se convierte en una lista de partículas de color
+  const iw = el.naturalWidth || el.videoWidth, ih = el.naturalHeight || el.videoHeight;
+  if (!iw || !ih) return null;
+  const step = pix.size, s = Math.min(rect.w / iw, rect.h / ih), cw = Math.max(1, Math.round(iw * s / step)), ch = Math.max(1, Math.round(ih * s / step));
+  smp.width = cw; smp.height = ch;
+  let d;
+  try { smpx.drawImage(el, 0, 0, cw, ch); d = smpx.getImageData(0, 0, cw, ch).data; } catch { return null; } // file:// o lienzo contaminado
+  const ox = rect.left + (rect.w - cw * step) / 2, oy = rect.top + (rect.h - ch * step) / 2, pts = [];
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+    const k = (y * cw + x) * 4;
+    if (d[k + 3] > 100) pts.push({ x: ox + x * step + step / 2, y: oy + y * step + step / 2, c: `rgb(${d[k]},${d[k + 1]},${d[k + 2]})` });
+  }
+  return pts;
+}
+
+let navToken = 0;
+async function cambiar(paso) {
+  i = (i + paso + dibujos.length) % dibujos.length;
+  const my = ++navToken, card = $('#carrusel'), dir = paso < 0 ? -1 : 1, rect = innerRect(card);
+  scramble($('#contador'), (i + 1) + ' / ' + dibujos.length);
+  pix.dissolveAll(dir);
+  const old = card.querySelector('img, video');
+  if (old && !card.classList.contains('generating')) { const pts = sample(old, rect); if (pts) pix.spawnOut(pts, rect, dir); }
+  card.classList.add('generating');
+  if (paso) { audio.whoosh(dir); kura.perturb(.8); }
+  const el = await loadMedia(dibujos[i].n);
+  if (my !== navToken) return;
+  const pts = el.tagName === 'SPAN' || calm ? null : sample(el, rect);
+  if (pts) { await pix.assemble(pts, rect, dir); if (my !== navToken) return; }
+  card.replaceChildren(el);
+  if (el.play) el.play().catch(() => {});
+  card.classList.remove('generating');
+  pix.clearIns();
+  if (paso) toast(`✦ imagen ${i + 1} regenerada · ${Math.abs(gauss(.0042, .0011)).toFixed(4)}s · confianza ${(99 + Math.random()).toFixed(1)}%`);
+}
+
+let genToken = 0;
+function abrir() {
+  if (state.view !== 'inicio') return;
+  const d = dibujos[i], my = ++genToken;
+  const go = () => {
+    ponerFoto('img-nino', d.n);
+    ponerFoto('img-ia', d.n + 'IA');
+    $('#inicio').hidden = true; $('#comparacion').hidden = false;
+    setView('comparacion'); sctx.clearRect(0, 0, W, H);
+    const ia = $('#img-ia'); ia.classList.remove('diffusing'); void ia.offsetWidth; ia.classList.add('diffusing');
+    $('#lista-nino').textContent = ''; $('#lista-ia').textContent = '';
+  };
+  const after = () => {
+    if (my !== genToken) return;
+    membrane.init(); life.init(life.seed);
+    typeList($('#lista-nino'), d.nino, my); typeList($('#lista-ia'), d.ia, my);
+    $$('.col h2 .name, .aprendi b').forEach(el => scramble(el, el.dataset.txt || (el.dataset.txt = el.textContent), 700));
+  };
+  audio.whoosh(1); audio.blip(880, .05); kura.perturb(.5);
+  pix.dissolveAll(1); // si la imagen aún se estaba armando, sus partículas se las lleva el viento
+  if (document.startViewTransition && !calm) document.startViewTransition(go).updateCallbackDone.then(after);
+  else { go(); after(); }
+  setTimeout(() => toast('✦ análisis comparativo · 1 humano vs 1 modelo'), 700);
+}
+function volver() {
+  if (state.view !== 'comparacion') return;
+  ++genToken;
+  const go = () => { $('#comparacion').hidden = true; $('#inicio').hidden = false; setView('inicio'); sctx.clearRect(0, 0, W, H); $('.vs').style.translate = ''; };
+  const after = () => title.layout();
+  audio.whoosh(-1);
+  if (document.startViewTransition && !calm) document.startViewTransition(go).updateCallbackDone.then(after);
+  else { go(); after(); }
+}
+
+// ═══ microinteracciones ═══
+const GLYPHS = '!<>-_\\/[]{}=+*^?#01✦░▒▓';
+function scramble(el, text, dur = 520) {
+  const start = performance.now(), id = el._sid = (el._sid || 0) + 1;
+  const tick = now => {
+    if (el._sid !== id) return;
+    const p = Math.min(1, (now - start) / dur); let out = '';
+    for (let k = 0; k < text.length; k++) out += k < p * text.length || text[k] === ' ' ? text[k] : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+    el.textContent = out;
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function typeList(ul, html, my) {
+  ul.innerHTML = html;
+  if (!ul.children.length) ul.innerHTML = '<li class="vacio">∅ 0 aprendizajes detectados</li>';
+  [...ul.children].forEach((li, k) => {
+    const txt = li.textContent; li.textContent = ''; li.classList.add('pending');
+    setTimeout(() => {
+      if (my !== genToken) return;
+      li.classList.replace('pending', 'typing'); let n = 0;
+      const iv = setInterval(() => {
+        if (my !== genToken) return clearInterval(iv);
+        li.textContent = txt.slice(0, ++n);
+        if (n >= txt.length) { clearInterval(iv); li.classList.remove('typing'); audio.blip(1500 + k * 200, .02); }
+      }, 24);
+    }, 300 + k * 450);
+  });
+}
+function toast(msg) {
+  const box = $('#toasts');
+  while (box.children.length > 2) box.firstChild.remove();
+  const t = document.createElement('div'); t.className = 'toast glass'; t.textContent = msg; box.append(t);
+  setTimeout(() => t.classList.add('out'), 2800); setTimeout(() => t.remove(), 3400);
+}
+
+// inclinación 3D y botones magnéticos, ambos con resortes amortiguados
+const tilts = $$('.tilt').map(el => ({ el, rx: 0, ry: 0, vx: 0, vy: 0 }));
+const mags = $$('[data-mag]').map(el => ({ el, x: 0, y: 0, vx: 0, vy: 0 }));
+function springsFrame() {
+  for (const t of tilts) {
+    if (!t.el.offsetParent) continue;
+    const r = t.el.getBoundingClientRect(), inside = mouse.x > r.left && mouse.x < r.right && mouse.y > r.top && mouse.y < r.bottom && mouse.idle < 2;
+    const nx = (mouse.x - r.left) / r.width, ny = (mouse.y - r.top) / r.height;
+    t.vx = (t.vx + ((inside ? (ny - .5) * -12 : 0) - t.rx) * .1) * .75; t.rx += t.vx;
+    t.vy = (t.vy + ((inside ? (nx - .5) * 14 : 0) - t.ry) * .1) * .75; t.ry += t.vy;
+    t.el.style.setProperty('--rx', t.rx.toFixed(2) + 'deg'); t.el.style.setProperty('--ry', t.ry.toFixed(2) + 'deg');
+    if (inside) { t.el.style.setProperty('--gx', nx * 100 + '%'); t.el.style.setProperty('--gy', ny * 100 + '%'); }
+  }
+  for (const m of mags) {
+    if (!m.el.offsetParent) continue;
+    const r = m.el.getBoundingClientRect(), cx = r.left + r.width / 2 - m.x, cy = r.top + r.height / 2 - m.y;
+    const near = Math.abs(mouse.x - cx) < r.width / 2 + 40 && Math.abs(mouse.y - cy) < r.height / 2 + 40 && mouse.idle < 2;
+    m.vx = (m.vx + ((near ? (mouse.x - cx) * .3 : 0) - m.x) * .15) * .7; m.x += m.vx;
+    m.vy = (m.vy + ((near ? (mouse.y - cy) * .3 : 0) - m.y) * .15) * .7; m.y += m.vy;
+    m.el.style.translate = `${m.x.toFixed(1)}px ${m.y.toFixed(1)}px`;
+  }
+}
+const ring = $('#cursor'), dot = $('#cursor-dot'), cur = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
+function cursorFrame() {
+  cur.vx = (cur.vx + (mouse.x - cur.x) * .2) * .62; cur.vy = (cur.vy + (mouse.y - cur.y) * .2) * .62;
+  cur.x += cur.vx; cur.y += cur.vy;
+  const sp = Math.min(Math.hypot(cur.vx, cur.vy), 40), a = Math.atan2(cur.vy, cur.vx);
+  ring.style.transform = `translate(${cur.x}px, ${cur.y}px) rotate(${a}rad) scale(${1 + sp * .02}, ${1 - sp * .01})`;
+  dot.style.transform = `translate(${mouse.x}px, ${mouse.y}px)`;
+}
+
+// ═══ panel del motor ═══
+function renderMatrix() {
+  const names = ['mig', 'ia', 'apr'];
+  $('#matriz').innerHTML = '<span></span>' + names.map(n => `<span>${n}</span>`).join('') +
+    life.M.map((row, a) => `<span>${names[a]}</span>` + row.map((v, b) => {
+      const c = v >= 0 ? `rgba(185,236,102,${.15 + v * .7})` : `rgba(244,114,182,${.15 - v * .7})`;
+      return `<button data-a="${a}" data-b="${b}" style="background:${c}" title="${life.types[a].name} → ${life.types[b].name}">${v > 0 ? '+' : ''}${v.toFixed(2)}</button>`;
+    }).join('')).join('');
+}
+$('#matriz').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const row = life.M[b.dataset.a], k = +b.dataset.b, step = e.shiftKey ? -.25 : .25;
+  let v = Math.round((row[k] + step) * 100) / 100;
+  if (v > 1) v = -1; if (v < -1) v = 1;
+  row[k] = v; renderMatrix(); audio.blip(600 + v * 300, .04);
+});
+$('#semilla').onclick = () => { life.init(); audio.blip(900, .04); };
+$$('#modos .chip').forEach(b => b.onclick = () => { field.setMode(+b.dataset.mode); toast('U3 · fuerza: ' + MODES[b.dataset.mode]); });
+$('#flujo').onchange = e => { field.flow = e.target.checked; };
+$('#ver-campo').onchange = e => { flow.show = e.target.checked; };
+$('#k').oninput = e => { kura.K = +e.target.value; $('#k-out').textContent = kura.K.toFixed(2); };
+$('#perturbar').onclick = () => { kura.perturb(1); toast('U4 · fases perturbadas'); };
+$('#soltar').onclick = () => { if (state.view === 'inicio') title.release(); };
+$('#reboot').onclick = () => { if (state.view !== 'boot') boot.show(state.view); };
+const motor = $('#motor');
+function setPanel(open) {
+  motor.classList.toggle('open', open); $('#motor-toggle').setAttribute('aria-expanded', open);
+  // en pantallas anchas el contenido se corre: hay que volver a medir lo que depende de posiciones
+  if (boot.started) setTimeout(() => { title.layout(); if (state.view === 'comparacion') membrane.init(); }, 450);
+}
+$('#motor-toggle').onclick = () => setPanel(!motor.classList.contains('open'));
+setPanel(innerWidth >= 1280 && innerHeight >= 760);
+
+// ═══ eventos ═══
+$('#anterior').onclick = () => cambiar(-1);
+$('#siguiente').onclick = () => cambiar(1);
+$('#carrusel').onclick = abrir;
+$('#carrusel').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
+$('#volver').onclick = volver;
+$('#generar').onclick = () => boot.exit();
+$('#sonido').onclick = () => { audio.init(); audio.toggle(); };
+$('#switch').onclick = e => {
+  e.preventDefault(); audio.whoosh(-1);
+  const href = e.currentTarget.href;
+  document.body.classList.add('exiting');
+  setTimeout(() => { location.href = href; }, 480);
+};
+$$('.btn, .chip, .switch').forEach(b => b.addEventListener('pointerenter', () => audio.blip(1800, .015)));
+
+addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.idle = 0; mouse.seen = true; }, { passive: true });
+document.addEventListener('pointerover', e => document.body.classList.toggle('hovering', !!e.target.closest('button, a, input, #carrusel, .l')));
+addEventListener('pointerdown', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.idle = 0; mouse.seen = true;
+  if (state.view === 'boot' || e.target.closest('button, a, input, label, .l, #motor, .caja')) return;
+  const hit = kura.agents.find(a => Math.hypot(a.x - e.clientX, a.y - e.clientY) < 24);
+  if (hit) { kura.kick(hit); sparks.emit(hit.x, hit.y, 18, 90); return; }
+  field.impulse(e.clientX, e.clientY); sparks.emit(e.clientX, e.clientY, 28, 120); audio.blip(220, .06);
+});
+addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (state.view === 'boot') { if (e.key === 'Enter' && boot.ready && document.activeElement !== $('#generar')) boot.exit(); return; }
+  const k = e.key.toLowerCase(), onBody = document.activeElement === document.body;
+  if (e.key === 'ArrowRight' && state.view === 'inicio') cambiar(1);
+  else if (e.key === 'ArrowLeft' && state.view === 'inicio') cambiar(-1);
+  else if (e.key === 'Enter' && onBody && state.view === 'inicio') abrir();
+  else if (e.key === 'Escape') volver();
+  else if (MODES[e.key]) { field.setMode(+e.key); toast('U3 · fuerza: ' + MODES[e.key]); }
+  else if (k === 'm') { audio.init(); audio.toggle(); }
+  else if (k === 'f') { flow.show = !flow.show; $('#ver-campo').checked = flow.show; }
+  else if (k === 'p') { kura.perturb(1); toast('U4 · fases perturbadas'); }
+  else if (k === 'l' && state.view === 'inicio') title.release();
+  else if (k === 'h') setPanel(!motor.classList.contains('open'));
+});
+let lastSY = scrollY;
+addEventListener('scroll', () => { // en móvil la membrana es horizontal y debe seguir al «VS» cuando la página se desplaza
+  const d = scrollY - lastSY; lastSY = scrollY;
+  if (state.view === 'comparacion' && !membrane.vertical) for (const n of membrane.nodes) { n.y -= d; n.ry -= d; }
+}, { passive: true });
+let rzT;
+addEventListener('resize', () => {
+  W = innerWidth; H = innerHeight;
+  sizeCanvas(fx, fctx); sizeCanvas(sim, sctx); flow.resize(); field.resize();
+  clearTimeout(rzT);
+  rzT = setTimeout(() => { title.layout(); if (state.view === 'comparacion') membrane.init(); if (state.view === 'boot') slime.init(); }, 150);
+});
+
+// ═══ bucle principal ═══
+let last = performance.now(), hud = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now; T += dt; mouse.idle += dt;
+  fctx.clearRect(0, 0, W, H);
+  const md = Math.hypot(mouse.x - mouse.lx, mouse.y - mouse.ly); mouse.lx = mouse.x; mouse.ly = mouse.y;
+  if (!coarse && !calm && md > 2) sparks.emit(mouse.x, mouse.y, Math.min(3, (md / 12) | 0) + 1, 22);
+  if (state.view === 'boot') boot.frame(dt);
+  else {
+    kura.step(dt); kura.move(); audio.update(kura.r);
+    const pulse = kura.agents.reduce((s, a) => s + a.flash, 0) / kura.agents.length;
+    flow.update(T);
+    field.frame(dt, T, pulse);
+    // lienzo de simulación con estela: se borra parcialmente cada cuadro
+    sctx.globalCompositeOperation = 'destination-out'; sctx.fillStyle = 'rgba(0,0,0,.22)'; sctx.fillRect(0, 0, W, H); sctx.globalCompositeOperation = 'source-over';
+    if (state.view === 'inicio') { flock.update(dt); flock.draw(sctx); title.update(dt); }
+    else if (state.view === 'comparacion') { life.update(); membrane.update(); life.draw(sctx); membrane.draw(sctx); }
+    flow.draw(fctx); pix.update(dt); pix.draw(fctx); kura.draw(fctx);
+    springsFrame();
+    root.setProperty('--pulse', pulse.toFixed(3)); root.setProperty('--sync', kura.r.toFixed(3));
+    if ((hud += dt) > .4) {
+      hud = 0; $('#r-out').textContent = kura.r.toFixed(2);
+      $('#modelo').textContent = `ia-∞ · ${Math.round(gauss(1840, 160))} tok/s · sincronía ${(kura.r * 100) | 0}% · ${MODES[field.mode]}`;
+    }
+  }
+  sparks.update(dt); sparks.draw(fctx);
+  cursorFrame();
+}
+
+// ═══ arranque ═══
+sizeCanvas(fx, fctx); sizeCanvas(sim, sctx); flow.resize(); flow.update(0);
+try { field.init(); } catch (err) { console.warn('sin WebGL, sigo sin el campo de fuerzas', err); }
+field.setMode(5);
+flock.init(small ? 30 : 70); kura.init(); life.init(4821); renderMatrix(); title.build();
+boot.show('inicio');
+requestAnimationFrame(frame);</script>
+</body>
+</html>
